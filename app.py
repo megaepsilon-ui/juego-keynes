@@ -10,6 +10,8 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+MAX_RONDAS = 5
+
 # --- CONEXIÓN Y BASE DE DATOS LOCAL ---
 def get_conn():
     return sqlite3.connect("juegos_clase.db", check_same_thread=False)
@@ -37,14 +39,13 @@ juego = st.sidebar.selectbox("Juego activo:", [
     "p-Beauty Contest (2/3 del promedio)",
     "Juego de Bienes Públicos"
 ])
-ronda = st.sidebar.number_input("Ronda actual:", min_value=1, max_value=10, value=1, step=1)
 
 # ==============================================================================
 # VISTA DEL ESTUDIANTE
 # ==============================================================================
 if rol == "👨‍🎓 Estudiante":
     st.title(f"🎮 {juego}")
-    st.caption(f"Sesión activa — **Ronda {ronda}**")
+    st.caption(f"Experimento de Teoría de Juegos — **Máximo {MAX_RONDAS} rondas**")
     
     # --- PESTAÑAS: JUEGO / GUÍA Y EXPLICACIÓN / CALCULADORA DE ESTRATEGIA ---
     tab_jugar, tab_guia, tab_simulador = st.tabs([
@@ -143,65 +144,109 @@ if rol == "👨‍🎓 Estudiante":
     
     # ------------------ PESTAÑA 1: FORMULARIO DE JUGADA ------------------
     with tab_jugar:
-        st.subheader("Paso a paso para enviar tu decisión:")
-        
-        with st.form("form_jugada"):
-            col_id1, col_id2 = st.columns([2, 1])
-            with col_id1:
-                nombre = st.text_input("1. Tu nombre completo o código de estudiante:", placeholder="Ej: Juan Pérez / 20261001")
-            with col_id2:
-                st.info(f"Ronda: **{ronda}**")
+        if "nombre_estudiante" not in st.session_state:
+            st.session_state["nombre_estudiante"] = ""
             
-            st.divider()
+        col_nom, col_btn = st.columns([3, 1])
+        with col_nom:
+            nombre_input = st.text_input(
+                "👤 Tu nombre completo o código de estudiante:",
+                value=st.session_state["nombre_estudiante"],
+                placeholder="Ej: Juan Pérez / 20261001",
+                help="Tu progreso se guardará automáticamente con este nombre."
+            ).strip()
             
-            if "Beauty" in juego:
-                st.markdown("#### 2. Selecciona tu número estratégico")
-                st.write("Debes escoger un valor entre **0 y 100**. Ganará quien esté más cerca de **2/3 del promedio** de toda la clase.")
-                decision = st.number_input(
-                    "Tu número seleccionado (0.0 a 100.0):",
-                    min_value=0.0,
-                    max_value=100.0,
-                    value=33.3,
-                    step=0.1,
-                    help="Ingresa el valor que crees que igualará 2/3 del promedio de todos."
-                )
-            else:
-                st.markdown("#### 2. Decide tu contribución al Bien Público")
-                st.write("Tienes una dotación inicial de **$20**. ¿Cuánto deseas aportar al fondo común?")
-                decision = st.slider(
-                    "Tu aporte ($):",
-                    min_value=0.0,
-                    max_value=20.0,
-                    value=10.0,
-                    step=1.0,
-                    help="Lo que no aportes queda en tu cuenta privada ($20 - tu aporte)."
-                )
-                st.caption(f"Te quedas con **${20 - decision:.2f}** seguros y aportas **${decision:.2f}** al beneficio común.")
+        if nombre_input != st.session_state["nombre_estudiante"]:
+            st.session_state["nombre_estudiante"] = nombre_input
+            st.rerun()
+
+        estudiante = st.session_state["nombre_estudiante"]
+
+        if not estudiante:
+            st.info("👋 Ingresa tu nombre o código en el campo de arriba para comenzar a jugar.")
+        else:
+            with col_btn:
+                st.write("")
+                st.write("")
+                if st.button("🔄 Cambiar jugador"):
+                    st.session_state["nombre_estudiante"] = ""
+                    st.rerun()
+
+            with get_conn() as conn:
+                res = conn.execute(
+                    "SELECT ronda, decision FROM respuestas WHERE juego = ? AND estudiante = ? ORDER BY ronda ASC",
+                    (juego, estudiante)
+                ).fetchall()
+            
+            rondas_jugadas = [r[0] for r in res]
+            
+            if len(rondas_jugadas) >= MAX_RONDAS:
+                st.success(f"🎉 **¡Excelente, {estudiante}! Has completado las {MAX_RONDAS} rondas del juego.**")
+                st.progress(1.0)
+                st.info("Has alcanzado el límite de 5 rondas. Presta atención al proyector para ver las estadísticas y los resultados de toda la clase.")
                 
-            st.divider()
-            enviado = st.form_submit_button("🚀 Confirmar y Enviar Decisión", use_container_width=True)
-            
-            if enviado:
-                if not nombre.strip():
-                    st.error("⚠️ Por favor ingresa tu nombre o código antes de enviar.")
-                else:
-                    try:
-                        with get_conn() as conn:
-                            conn.execute(
-                                "INSERT INTO respuestas (juego, ronda, estudiante, decision) VALUES (?, ?, ?, ?)",
-                                (juego, ronda, nombre.strip(), float(decision))
-                            )
-                        st.success(f"✅ ¡Jugada registrada con éxito para **{nombre.strip()}** en la Ronda {ronda}!")
-                        st.balloons()
-                    except sqlite3.IntegrityError:
-                        st.warning(f"⚠️ Ya existe una jugada registrada con el nombre '{nombre.strip()}' para la Ronda {ronda}. Espera a la siguiente ronda o usa tu código único correcto.")
+                df_resumen = pd.DataFrame(res, columns=["Ronda", "Tu Decisión"])
+                st.subheader("📋 Resumen de tus decisiones:")
+                st.dataframe(df_resumen, use_container_width=True, hide_index=True)
+            else:
+                ronda_actual = min([r for r in range(1, MAX_RONDAS + 1) if r not in rondas_jugadas])
+                
+                st.markdown(f"### 📍 Ronda **{ronda_actual}** de **{MAX_RONDAS}**")
+                st.progress((ronda_actual - 1) / MAX_RONDAS)
+                
+                with st.form(f"form_jugada_{ronda_actual}"):
+                    if "Beauty" in juego:
+                        st.markdown("#### Selecciona tu número estratégico")
+                        st.write("Debes escoger un valor entre **0 y 100**. Ganará quien esté más cerca de **2/3 del promedio** de toda la clase.")
+                        decision = st.number_input(
+                            f"Tu número para la Ronda {ronda_actual}:",
+                            min_value=0.0,
+                            max_value=100.0,
+                            value=33.3,
+                            step=0.1,
+                            help="Ingresa el valor que crees que igualará 2/3 del promedio de todos."
+                        )
+                    else:
+                        st.markdown("#### Decide tu contribución al Bien Público")
+                        st.write("Tienes una dotación inicial de **$20**. ¿Cuánto deseas aportar al fondo común?")
+                        decision = st.slider(
+                            f"Tu aporte en la Ronda {ronda_actual} ($):",
+                            min_value=0.0,
+                            max_value=20.0,
+                            value=10.0,
+                            step=1.0,
+                            help="Lo que no aportes queda en tu cuenta privada ($20 - tu aporte)."
+                        )
+                        st.caption(f"Te quedas con **${20 - decision:.2f}** seguros y aportas **${decision:.2f}** al beneficio común.")
+                        
+                    st.divider()
+                    texto_boton = f"🚀 Confirmar y Enviar Ronda {ronda_actual}" if ronda_actual < MAX_RONDAS else "🏁 Confirmar y Finalizar Ronda 5"
+                    enviado = st.form_submit_button(texto_boton, use_container_width=True)
+                    
+                    if enviado:
+                        try:
+                            with get_conn() as conn:
+                                conn.execute(
+                                    "INSERT INTO respuestas (juego, ronda, estudiante, decision) VALUES (?, ?, ?, ?)",
+                                    (juego, ronda_actual, estudiante, float(decision))
+                                )
+                            if ronda_actual < MAX_RONDAS:
+                                st.success(f"✅ ¡Ronda {ronda_actual} enviada! Avanzando automáticamente a la Ronda {ronda_actual + 1}...")
+                            else:
+                                st.balloons()
+                                st.success(f"🎉 ¡Todas las {MAX_RONDAS} rondas han sido completadas!")
+                            st.rerun()
+                        except sqlite3.IntegrityError:
+                            st.warning(f"Ya se había registrado una respuesta para la Ronda {ronda_actual}.")
 
 # ==============================================================================
 # VISTA DEL PROFESOR (PROYECTOR)
 # ==============================================================================
 else:
+    ronda = st.sidebar.number_input("Ronda a proyectar:", min_value=1, max_value=MAX_RONDAS, value=1, step=1)
+    
     st.title(f"📊 Panel de Control del Profesor: {juego}")
-    st.caption(f"Visualización central para proyector — **Ronda {ronda}**")
+    st.caption(f"Visualización central para proyector — **Ronda {ronda} de {MAX_RONDAS}**")
     
     # Obtener contraseña desde secrets si existe, o usar predeterminada
     docente_password = st.secrets.get("DOCENTE_PASSWORD", "epn2026")
@@ -220,11 +265,18 @@ else:
         
         # Métricas de participación
         c_status1, c_status2, c_status3 = st.columns([1, 1, 1])
-        c_status1.metric("👥 Respuestas recibidas (Ronda actual)", len(df))
-        c_status2.metric("🔄 Ronda activa", f"Ronda {ronda}")
+        c_status1.metric("👥 Respuestas en ronda proyectada", len(df))
+        c_status2.metric("🔄 Ronda proyectada", f"Ronda {ronda} de {MAX_RONDAS}")
         with c_status3:
             if st.button("🔄 Actualizar datos de estudiantes", use_container_width=True):
                 st.rerun()
+
+        # Resumen de participación en las 5 rondas
+        r_cols = st.columns(MAX_RONDAS)
+        for r_num in range(1, MAX_RONDAS + 1):
+            count_r = df_hist[df_hist["ronda"] == r_num]["participantes"].values
+            val = int(count_r[0]) if len(count_r) > 0 else 0
+            r_cols[r_num - 1].metric(f"Ronda {r_num}", f"{val} alumnos")
                 
         revelar = st.toggle("🔓 Revelar resultados y gráficos en pantalla (Proyector)", value=False)
         
