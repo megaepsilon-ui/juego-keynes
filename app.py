@@ -263,13 +263,30 @@ else:
                 conn, params=(juego,)
             )
         
-        # Métricas de participación
-        c_status1, c_status2, c_status3 = st.columns([1, 1, 1])
-        c_status1.metric("👥 Respuestas en ronda proyectada", len(df))
+        # Métricas de participación y controles rápidos
+        c_status1, c_status2, c_status3, c_status4 = st.columns([1, 1, 1, 1])
+        c_status1.metric("👥 Respuestas en ronda", len(df))
         c_status2.metric("🔄 Ronda proyectada", f"Ronda {ronda} de {MAX_RONDAS}")
         with c_status3:
-            if st.button("🔄 Actualizar datos de estudiantes", use_container_width=True):
+            st.write("")
+            if st.button("🔄 Actualizar", use_container_width=True, help="Refrescar respuestas recibidas"):
                 st.rerun()
+        with c_status4:
+            st.write("")
+            with st.popover("🗑️ Reiniciar Juego", use_container_width=True):
+                st.markdown("##### Opciones de reinicio")
+                st.write(f"Permite a los estudiantes comenzar nuevamente desde la **Ronda 1**.")
+                if st.button("🧹 Reiniciar juego activo", use_container_width=True, key="main_reset_juego"):
+                    with get_conn() as conn:
+                        conn.execute("DELETE FROM respuestas WHERE juego = ?", (juego,))
+                    st.success(f"Respuestas de '{juego}' eliminadas.")
+                    st.rerun()
+                st.divider()
+                if st.button("⚠️ Borrar toda la base", use_container_width=True, key="main_reset_todo"):
+                    with get_conn() as conn:
+                        conn.execute("DELETE FROM respuestas")
+                    st.success("Toda la base de datos ha sido borrada.")
+                    st.rerun()
 
         # Resumen de participación en las 5 rondas
         r_cols = st.columns(MAX_RONDAS)
@@ -361,11 +378,19 @@ else:
                     st.dataframe(df, use_container_width=True)
                     
         st.sidebar.divider()
-        if st.sidebar.button("🗑️ Borrar todos los datos de la base"):
-            with get_conn() as conn:
-                conn.execute("DELETE FROM respuestas")
-            st.sidebar.success("Base de datos reiniciada con éxito.")
-            st.rerun()
+        st.sidebar.subheader("⚙️ Control de Partida")
+        with st.sidebar.popover("🗑️ Reiniciar Partida", use_container_width=True):
+            st.caption("Esta acción permitirá a los estudiantes jugar de nuevo desde la Ronda 1.")
+            if st.button("🧹 Reiniciar juego activo", use_container_width=True, key="sb_reset_current"):
+                with get_conn() as conn:
+                    conn.execute("DELETE FROM respuestas WHERE juego = ?", (juego,))
+                st.success(f"'{juego}' reiniciado con éxito.")
+                st.rerun()
+            if st.button("⚠️ Borrar toda la base de datos", use_container_width=True, key="sb_reset_all"):
+                with get_conn() as conn:
+                    conn.execute("DELETE FROM respuestas")
+                st.success("Laboratorio reiniciado por completo.")
+                st.rerun()
     else:
         if clave:
             st.error("❌ Contraseña incorrecta. Por favor verifica tus credenciales.")
