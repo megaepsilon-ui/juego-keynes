@@ -203,9 +203,11 @@ else:
     st.title(f"📊 Panel de Control del Profesor: {juego}")
     st.caption(f"Visualización central para proyector — **Ronda {ronda}**")
     
+    # Obtener contraseña desde secrets si existe, o usar predeterminada
+    docente_password = st.secrets.get("DOCENTE_PASSWORD", "epn2026")
     clave = st.sidebar.text_input("Contraseña docente:", type="password")
     
-    if clave == "epn2026":
+    if clave == docente_password:
         with get_conn() as conn:
             df = pd.read_sql_query(
                 "SELECT estudiante, decision FROM respuestas WHERE juego = ? AND ronda = ?",
@@ -313,4 +315,7 @@ else:
             st.sidebar.success("Base de datos reiniciada con éxito.")
             st.rerun()
     else:
-        st.info("🔒 Ingresa la contraseña docente (`epn2026`) en la barra lateral izquierda para acceder al proyector y controles.")
+        if clave:
+            st.error("❌ Contraseña incorrecta. Por favor verifica tus credenciales.")
+        else:
+            st.info("🔒 Ingresa la contraseña docente en la barra lateral izquierda para acceder al panel de control y proyector.")
