@@ -74,17 +74,10 @@ if rol == "👨‍🎓 Estudiante":
             > *"No se trata de elegir según el gusto personal, ni siquiera según la auténtica belleza, sino de anticipar lo que la opinión promedio cree que será la opinión promedio."*
             
             ---
-            ### 🧠 Guía de razonamiento estratégico (Niveles $k$):
-            * **Nivel 0 (Ingenuo / Aleatorio):** Las personas eligen números al azar entre 0 y 100. El promedio esperado sería alrededor de **50**.
-            * **Nivel 1 (Primer orden de deducción):** Si crees que los demás jugarán al azar (promedio 50), deberías jugar:
-              $$\\frac{2}{3} \\times 50 \\approx \\mathbf{33.3}$$
-            * **Nivel 2 (Segundo orden):** Si piensas que los demás son listos y jugarán 33.3, deberías anticiparte jugando:
-              $$\\frac{2}{3} \\times 33.3 \\approx \\mathbf{22.2}$$
-            * **Nivel 3:** Si todos hacen lo anterior:
-              $$\\frac{2}{3} \\times 22.2 \\approx \\mathbf{14.8}$$
-            * **Equilibrio de Nash (Racionalidad común infinita):** Si este proceso se repite infinitas veces, el único número donde nadie tiene incentivos a desviarse es el **0**. 
-            
-            ⚠️ **¡Pero cuidado!** En el mundo real no todos son perfectamente racionales. Si tú juegas 0 pero el resto juega 50, ¡perderás! Tu reto es **predecir la profundidad de pensamiento de tus compañeros hoy**.
+            ### 🎯 Desafío para el jugador:
+            * No se trata de elegir tu número favorito ni de buscar una respuesta matemática aislada.
+            * Tu reto es **anticipar la mentalidad y comportamiento de tus compañeros**: adivinar qué número jugarán en promedio y posicionarte estratégicamente a **2/3 de ese promedio**.
+            * ¿Qué número crees que elegirá la mayoría en esta ronda?
             """)
         else:
             st.header("🤝 Dilema de los Bienes Públicos (Dilema del Polizón)")
@@ -327,15 +320,19 @@ else:
                     st.plotly_chart(fig, use_container_width=True)
                     
                     # Explicación pedagógica para la clase
-                    with st.expander("🎓 Análisis pedagógico para la clase: Niveles de Razonamiento"):
+                    with st.expander("🧠 Guía de razonamiento estratégico (Niveles k) — Para debate docente", expanded=True):
                         st.markdown(f"""
-                        * **Media observada:** {promedio:.2f} | **Meta ganadora:** {meta:.2f}
-                        * **Picos típicos en la literatura (Nagel, 1995):**
-                          - Alrededor de **50**: Jugadores de nivel 0 (elección intuitiva/aleatoria).
-                          - Alrededor de **33.3**: Jugadores de nivel 1 (anticiparon un promedio de 50).
-                          - Alrededor de **22.2**: Jugadores de nivel 2 (anticiparon que los demás jugarían 33.3).
-                          - Cerca de **0**: Jugadores con razonamiento deductivo infinito (Equilibrio de Nash estricto).
-                        * A medida que se juegan más rondas, se suele observar el fenómeno de **aprendizaje y convergencia hacia cero**.
+                        **Resultados de la ronda:** Promedio de la clase = **{promedio:.2f}** | Meta (2/3 del promedio) = **{meta:.2f}**
+                        
+                        ---
+                        ### 🧠 Guía de razonamiento estratégico (Niveles $k$):
+                        * **Nivel 0 (Ingenuo / Aleatorio):** Las personas eligen números al azar entre 0 y 100. El promedio esperado sería alrededor de **50**.
+                        * **Nivel 1 (Primer orden de deducción):** Si crees que los demás jugarán al azar (promedio 50), deberías jugar: $\\frac{2}{3} \\times 50 \\approx \\mathbf{33.3}$
+                        * **Nivel 2 (Segundo orden):** Si piensas que los demás son listos y jugarán 33.3, deberías anticiparte jugando: $\\frac{2}{3} \\times 33.3 \\approx \\mathbf{22.2}$
+                        * **Nivel 3:** Si todos hacen lo anterior: $\\frac{2}{3} \\times 22.2 \\approx \\mathbf{14.8}$
+                        * **Equilibrio de Nash (Racionalidad común infinita):** Si este proceso se repite infinitas veces, el único número donde nadie tiene incentivos a desviarse es el **0**.
+
+                        > ⚠️ **¡Pero cuidado!** En el mundo real no todos son perfectamente racionales. Si tú juegas 0 pero el resto juega 50, ¡perderás! Tu reto es predecir la profundidad de pensamiento de tus compañeros hoy.
                         """)
                     
                 else:
