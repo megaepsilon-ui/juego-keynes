@@ -65,10 +65,10 @@ juego = st.sidebar.selectbox("Juego activo:", [
 if "app_url" not in st.session_state:
     st.session_state["app_url"] = DEFAULT_APP_URL
 
-with st.sidebar.popover("📲 Código QR para ingresar", use_container_width=True):
-    st.markdown("##### 📱 Escanea con tu celular")
-    st.image(generar_qr(st.session_state["app_url"]), caption="Acceso al juego", use_container_width=True)
-    st.caption(f"[{st.session_state['app_url']}]({st.session_state['app_url']})")
+st.sidebar.divider()
+st.sidebar.markdown("### 📲 Código QR para ingresar")
+st.sidebar.image(generar_qr(st.session_state["app_url"]), caption="Escanea con tu celular", use_container_width=True)
+st.sidebar.caption(f"[{st.session_state['app_url']}]({st.session_state['app_url']})")
 
 # ==============================================================================
 # VISTA DEL ESTUDIANTE
@@ -318,13 +318,14 @@ else:
             val = int(count_r[0]) if len(count_r) > 0 else 0
             r_cols[r_num - 1].metric(f"Ronda {r_num}", f"{val} alumnos")
 
-        # Código QR para que los estudiantes escaneen desde el proyector
-        with st.expander("📲 Código QR para que los estudiantes ingresen con su celular", expanded=True):
+        # Código QR permanentemente visible para el proyector
+        st.divider()
+        with st.container(border=True):
             col_qr1, col_qr2 = st.columns([1, 2])
             with col_qr1:
-                st.image(generar_qr(st.session_state["app_url"]), caption="Escanea para unirte a la partida", width=200)
+                st.image(generar_qr(st.session_state["app_url"]), caption="Escanea para unirte a la partida", width=220)
             with col_qr2:
-                st.markdown("#### 📱 ¡Únete al juego desde tu celular!")
+                st.markdown("### 📱 ¡Únete al juego desde tu celular!")
                 st.markdown("""
                 * Apunta con la **cámara de tu teléfono** al código QR para ingresar directamente a la sala.
                 * No necesitas instalar ninguna aplicación.
@@ -338,6 +339,7 @@ else:
                     st.session_state["app_url"] = url_editada
                     st.rerun()
                 st.markdown(f"👉 **Enlace directo:** [{st.session_state['app_url']}]({st.session_state['app_url']})")
+        st.divider()
                 
         revelar = st.toggle("🔓 Revelar resultados y gráficos en pantalla (Proyector)", value=False)
         
