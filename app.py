@@ -92,13 +92,12 @@ def set_estado_sesion(juego, ronda, estado):
 
 # --- BARRA LATERAL: CONFIGURACIÓN ---
 st.sidebar.image("https://upload.wikimedia.org/wikipedia/commons/8/8c/Escudo_de_la_Escuela_Polit%C3%A9cnica_Nacional.png", width=90)
-st.sidebar.title("Configuración de Sesión")
+st.sidebar.title("Laboratorio Keynes")
 rol = st.sidebar.radio("Modo de vista:", ["👨‍🎓 Estudiante", "👨‍🏫 Profesor (Proyector)"])
 
-juego = st.sidebar.selectbox("Juego activo:", [
-    "p-Beauty Contest (2/3 del promedio)",
-    "Juego de Bienes Públicos"
-])
+# Juego fijado: Concurso de Belleza de Keynes
+juego = "p-Beauty Contest (2/3 del promedio)"
+st.sidebar.info("🎯 **Juego:** Concurso de Belleza de Keynes (2/3 del promedio)")
 
 if "app_url" not in st.session_state:
     st.session_state["app_url"] = DEFAULT_APP_URL
@@ -112,8 +111,8 @@ st.sidebar.caption(f"[{st.session_state['app_url']}]({st.session_state['app_url'
 # VISTA DEL ESTUDIANTE
 # ==============================================================================
 if rol == "👨‍🎓 Estudiante":
-    st.title(f"🎮 {juego}")
-    st.caption(f"Experimento de Teoría de Juegos — **Máximo {MAX_RONDAS} rondas**")
+    st.title("🎯 Concurso de Belleza de Keynes")
+    st.caption(f"Experimento de Teoría de Juegos (2/3 del promedio) — **Máximo {MAX_RONDAS} rondas**")
     
     # --- PESTAÑAS: JUEGO / GUÍA Y EXPLICACIÓN / CALCULADORA DE ESTRATEGIA ---
     tab_jugar, tab_guia, tab_simulador = st.tabs([
@@ -124,84 +123,39 @@ if rol == "👨‍🎓 Estudiante":
     
     # ------------------ PESTAÑA 2: GUÍA Y EXPLICACIÓN ------------------
     with tab_guia:
-        if "Beauty" in juego:
-            st.header("🎯 Concurso de Belleza de Keynes (p-Beauty Contest)")
-            st.markdown("""
-            ### 📌 ¿En qué consiste el juego?
-            Cada participante debe elegir un número real entre **0 y 100**. 
-            Una vez que todos envían su número, el sistema calcula el **promedio de toda la clase** y luego calcula la **meta**:
-            
-            $$\\text{Meta} = \\frac{2}{3} \\times \\text{Promedio General}$$
-            
-            🏆 **¿Quién gana?** El jugador cuyo número esté más cerca de la **meta** (menor distancia absoluta).
-            
-            ---
-            ### 📜 Origen histórico: John Maynard Keynes (1936)
-            En su famosa obra *Teoría General del Empleo, el Interés y el Dinero*, Keynes comparó los mercados financieros con un concurso de belleza de los periódicos británicos de su época, donde el premio no era para quien eligiera a la cara más bella según su gusto, sino para **quien adivinara la preferencia media de todos los lectores**.
-            
-            > *"No se trata de elegir según el gusto personal, ni siquiera según la auténtica belleza, sino de anticipar lo que la opinión promedio cree que será la opinión promedio."*
-            
-            ---
-            ### 🎯 Desafío para el jugador:
-            * No se trata de elegir tu número favorito ni de buscar una respuesta matemática aislada.
-            * Tu reto es **anticipar la mentalidad y comportamiento de tus compañeros**: adivinar qué número jugarán en promedio y posicionarte estratégicamente a **2/3 de ese promedio**.
-            * ¿Qué número crees que elegirá la mayoría en esta ronda?
-            """)
-        else:
-            st.header("🤝 Dilema de los Bienes Públicos (Dilema del Polizón)")
-            st.markdown("""
-            ### 📌 ¿En qué consiste el juego?
-            Representa una economía con provisión de un bien común (alumbrado público, investigación, trabajo en equipo, parques).
-            
-            * Cada estudiante recibe una dotación inicial de **\\$20**.
-            * Tú decides voluntariamente cuánto dinero aportar ($c_i$) al **fondo común** (entre \\$0 y \\$20).
-            * Lo que no aportes ($20 - c_i$), te lo quedas en tu bolsillo privado.
-            
-            ### 📈 Multiplicador y distribución:
-            1. Todas las aportaciones de la clase se suman en un pozo común.
-            2. El pozo se multiplica por un factor social de beneficio: **1.6x** (+60% de rendimiento por cooperación).
-            3. El pozo multiplicado se reparte **en partes estrictamente iguales** entre todos los participantes de la clase, **hayan aportado o no**.
-            
-            $$\\text{Tu Pago Final} = (20 - c_i) + \\frac{1.6 \\times \\sum c_j}{N}$$
-            
-            ---
-            ### ⚖️ El dilema estratégico: ¿Cooperar o ser un "Free Rider" (Polizón)?
-            * **El Óptimo Social (Cooperación total):** Si **todos** aportan sus \\$20, cada uno terminará con **\\$32** (ganancia neta de +\\$12 para todos).
-            * **La Tentación Individual (El Polizón):** Por cada \\$1 que tú aportas al fondo, recibes de vuelta solo $\\frac{1.6}{N}$ dólares (si hay más de 2 jugadores, esto es menor a \\$1). En cambio, si tú guardas tus \\$20 y los demás aportan, tú te beneficias del fondo de los demás ¡sin haber gastado nada!
-            * **Equilibrio de Nash:** Si cada individuo piensa estrictamente de forma egoísta para maximizar su pago seguro en una ronda, la estrategia dominante individual es aportar **\\$0**. Pero si todos aportan \\$0, todos terminan con solo **\\$20** (el peor resultado colectivo posible).
-            """)
+        st.header("🎯 Concurso de Belleza de Keynes (p-Beauty Contest)")
+        st.markdown("""
+        ### 📌 ¿En qué consiste el juego?
+        Cada participante debe elegir un número real entre **0 y 100**. 
+        Una vez que todos envían su número, el sistema calcula el **promedio de toda la clase** y luego calcula la **meta**:
+        
+        $$\\text{Meta} = \\frac{2}{3} \\times \\text{Promedio General}$$
+        
+        🏆 **¿Quién gana?** El jugador cuyo número esté más cerca de la **meta** (menor distancia absoluta).
+        
+        ---
+        ### 📜 Origen histórico: John Maynard Keynes (1936)
+        En su famosa obra *Teoría General del Empleo, el Interés y el Dinero*, Keynes comparó los mercados financieros con un concurso de belleza de los periódicos británicos de su época, donde el premio no era para quien eligiera a la cara más bella según su gusto, sino para **quien adivinara la preferencia media de todos los lectores**.
+        
+        > *"No se trata de elegir según el gusto personal, ni siquiera según la auténtica belleza, sino de anticipar lo que la opinión promedio cree que será la opinión promedio."*
+        
+        ---
+        ### 🎯 Desafío para el jugador:
+        * No se trata de elegir tu número favorito ni de buscar una respuesta matemática aislada.
+        * Tu reto es **anticipar la mentalidad y comportamiento de tus compañeros**: adivinar qué número jugarán en promedio y posicionarte estratégicamente a **2/3 de ese promedio**.
+        * ¿Qué número crees que elegirá la mayoría en esta ronda?
+        """)
     
     # ------------------ PESTAÑA 3: SIMULADOR DE ESTRATEGIA ------------------
     with tab_simulador:
-        if "Beauty" in juego:
-            st.subheader("💡 Simulador para el Concurso de Belleza")
-            st.write("Prueba qué número deberías jugar según lo que proyectas que hará el grupo:")
-            
-            est_promedio = st.slider("¿Cuál crees que será el promedio de la clase?", min_value=0.0, max_value=100.0, value=45.0, step=1.0)
-            meta_calculada = (2 / 3) * est_promedio
-            
-            st.info(f"👉 Si el promedio resulta ser **{est_promedio:.1f}**, la meta exacta ganadora será: **{meta_calculada:.2f}**")
-            st.caption("Pista: Recuerda ajustar tu número según cuántos niveles de deducción creas que aplicarán tus compañeros en esta ronda.")
-        else:
-            st.subheader("💡 Simulador de Pagos (Bienes Públicos)")
-            st.write("Calcula tu ganancia esperada bajo diferentes escenarios hipotéticos:")
-            
-            col_sim1, col_sim2, col_sim3 = st.columns(3)
-            with col_sim1:
-                tam_clase = st.number_input("Número estimado de jugadores (N):", min_value=2, max_value=100, value=20, step=1)
-            with col_sim2:
-                mi_aporte_sim = st.slider("Tu aporte hipotético ($):", 0.0, 20.0, 10.0, 1.0)
-            with col_sim3:
-                aporte_medio_demas = st.slider("Aporte promedio de los demás ($):", 0.0, 20.0, 10.0, 1.0)
-            
-            pozo_total_sim = mi_aporte_sim + (aporte_medio_demas * (tam_clase - 1))
-            retorno_individual_sim = (pozo_total_sim * 1.6) / tam_clase
-            pago_total_estudiante = (20 - mi_aporte_sim) + retorno_individual_sim
-            
-            c_res1, c_res2, c_res3 = st.columns(3)
-            c_res1.metric("Pozo social multiplicado", f"${pozo_total_sim * 1.6:.2f}")
-            c_res2.metric("Retorno del fondo público", f"${retorno_individual_sim:.2f}")
-            c_res3.metric("Tu ganancia total estimada", f"${pago_total_estudiante:.2f}")
+        st.subheader("💡 Simulador para el Concurso de Belleza")
+        st.write("Prueba qué número deberías jugar según lo que proyectas que hará el grupo:")
+        
+        est_promedio = st.slider("¿Cuál crees que será el promedio de la clase?", min_value=0.0, max_value=100.0, value=45.0, step=1.0)
+        meta_calculada = (2 / 3) * est_promedio
+        
+        st.info(f"👉 Si el promedio resulta ser **{est_promedio:.1f}**, la meta exacta ganadora será: **{meta_calculada:.2f}**")
+        st.caption("Pista: Recuerda ajustar tu número según cuántos niveles de deducción creas que aplicarán tus compañeros en esta ronda.")
     
     # ------------------ PESTAÑA 1: FORMULARIO DE JUGADA ------------------
     with tab_jugar:
@@ -302,30 +256,17 @@ if rol == "👨‍🎓 Estudiante":
                 st.progress((ronda_activa - 1) / MAX_RONDAS)
                 
                 with st.form(f"form_jugada_{ronda_activa}"):
-                    if "Beauty" in juego:
-                        st.markdown("#### Selecciona tu número estratégico")
-                        st.write("Debes escoger un valor entre **0 y 100**. Ganará quien esté más cerca de **2/3 del promedio** de toda la clase.")
-                        decision = st.number_input(
-                            f"Tu número para la Ronda {ronda_activa}:",
-                            min_value=0.0,
-                            max_value=100.0,
-                            value=33.3,
-                            step=0.1,
-                            help="Ingresa el valor que crees que igualará 2/3 del promedio de todos."
-                        )
-                    else:
-                        st.markdown("#### Decide tu contribución al Bien Público")
-                        st.write("Tienes una dotación inicial de **$20**. ¿Cuánto deseas aportar al fondo común?")
-                        decision = st.slider(
-                            f"Tu aporte en la Ronda {ronda_activa} ($):",
-                            min_value=0.0,
-                            max_value=20.0,
-                            value=10.0,
-                            step=1.0,
-                            help="Lo que no aportes queda en tu cuenta privada ($20 - tu aporte)."
-                        )
-                        st.caption(f"Te quedas con **${20 - decision:.2f}** seguros y aportas **${decision:.2f}** al beneficio común.")
-                        
+                    st.markdown("#### Selecciona tu número estratégico (0.0 - 100.0)")
+                    st.write("Debes escoger un valor entre **0 y 100**. Ganará quien esté más cerca de **2/3 del promedio** de toda la clase.")
+                    decision = st.number_input(
+                        f"Tu número para la Ronda {ronda_activa}:",
+                        min_value=0.0,
+                        max_value=100.0,
+                        value=33.3,
+                        step=0.1,
+                        help="Ingresa el valor que crees que igualará 2/3 del promedio de todos."
+                    )
+                    
                     st.divider()
                     texto_boton = f"🚀 Confirmar y Enviar Ronda {ronda_activa}" if ronda_activa < MAX_RONDAS else "🏁 Confirmar y Finalizar Ronda 5"
                     enviado = st.form_submit_button(texto_boton, use_container_width=True)
@@ -474,83 +415,55 @@ else:
                 st.warning("Aún no hay respuestas registradas para esta ronda.")
             else:
                 st.divider()
-                if "Beauty" in juego:
-                    promedio = df["decision"].mean()
-                    meta = (2 / 3) * promedio
-                    df["distancia"] = (df["decision"] - meta).abs()
-                    min_dist = df["distancia"].min()
-                    ganadores = df[df["distancia"] == min_dist]
+                promedio = df["decision"].mean()
+                meta = (2 / 3) * promedio
+                df["distancia"] = (df["decision"] - meta).abs()
+                min_dist = df["distancia"].min()
+                ganadores = df[df["distancia"] == min_dist]
+                
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Promedio de la clase", f"{promedio:.2f}")
+                c2.metric("Meta (2/3 del promedio)", f"{meta:.2f}")
+                nombres_ganadores = ", ".join([
+                    f"{row['estudiante']} ({row['universidad']}) — {row['decision']:.1f}" 
+                    if pd.notna(row.get('universidad')) and row.get('universidad') 
+                    else f"{row['estudiante']} ({row['decision']:.1f})" 
+                    for _, row in ganadores.iterrows()
+                ])
+                c3.metric("🏆 Ganador(es)", nombres_ganadores)
+                
+                fig = px.histogram(
+                    df, x="decision", nbins=25,
+                    title="Distribución de Elecciones de la Clase",
+                    labels={"decision": "Número Elegido", "count": "Frecuencia"},
+                    color_discrete_sequence=["#1f77b4"]
+                )
+                fig.add_vline(x=promedio, line_dash="dash", line_color="blue", annotation_text=f"Promedio ({promedio:.1f})")
+                fig.add_vline(x=meta, line_dash="solid", line_color="red", annotation_text=f"Meta 2/3 ({meta:.1f})")
+                fig.update_layout(xaxis=dict(range=[0, 100]))
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Explicación pedagógica para la clase
+                with st.expander("🧠 Guía de razonamiento estratégico (Niveles k) — Para debate docente", expanded=True):
+                    st.markdown(f"""
+                    **Resultados de la ronda:** Promedio de la clase = **{promedio:.2f}** | Meta (2/3 del promedio) = **{meta:.2f}**
                     
-                    c1, c2, c3 = st.columns(3)
-                    c1.metric("Promedio de la clase", f"{promedio:.2f}")
-                    c2.metric("Meta (2/3 del promedio)", f"{meta:.2f}")
-                    nombres_ganadores = ", ".join([
-                        f"{row['estudiante']} ({row['universidad']}) — {row['decision']:.1f}" 
-                        if pd.notna(row.get('universidad')) and row.get('universidad') 
-                        else f"{row['estudiante']} ({row['decision']:.1f})" 
-                        for _, row in ganadores.iterrows()
-                    ])
-                    c3.metric("🏆 Ganador(es)", nombres_ganadores)
-                    
-                    fig = px.histogram(
-                        df, x="decision", nbins=25,
-                        title="Distribución de Elecciones de la Clase",
-                        labels={"decision": "Número Elegido", "count": "Frecuencia"},
-                        color_discrete_sequence=["#1f77b4"]
-                    )
-                    fig.add_vline(x=promedio, line_dash="dash", line_color="blue", annotation_text=f"Promedio ({promedio:.1f})")
-                    fig.add_vline(x=meta, line_dash="solid", line_color="red", annotation_text=f"Meta 2/3 ({meta:.1f})")
-                    fig.update_layout(xaxis=dict(range=[0, 100]))
-                    st.plotly_chart(fig, use_container_width=True)
-                    
-                    # Explicación pedagógica para la clase
-                    with st.expander("🧠 Guía de razonamiento estratégico (Niveles k) — Para debate docente", expanded=True):
-                        st.markdown(f"""
-                        **Resultados de la ronda:** Promedio de la clase = **{promedio:.2f}** | Meta (2/3 del promedio) = **{meta:.2f}**
-                        
-                        ---
-                        ### 🧠 Guía de razonamiento estratégico (Niveles $k$):
-                        * **Nivel 0 (Ingenuo / Aleatorio):** Las personas eligen números al azar entre 0 y 100. El promedio esperado sería alrededor de **50**.
-                        * **Nivel 1 (Primer orden de deducción):** Si crees que los demás jugarán al azar (promedio 50), deberías jugar: $\\frac{2}{3} \\times 50 \\approx \\mathbf{33.3}$
-                        * **Nivel 2 (Segundo orden):** Si piensas que los demás son listos y jugarán 33.3, deberías anticiparte jugando: $\\frac{2}{3} \\times 33.3 \\approx \\mathbf{22.2}$
-                        * **Nivel 3:** Si todos hacen lo anterior: $\\frac{2}{3} \\times 22.2 \\approx \\mathbf{14.8}$
-                        * **Equilibrio de Nash (Racionalidad común infinita):** Si este proceso se repite infinitas veces, el único número donde nadie tiene incentivos a desviarse es el **0**.
+                    ---
+                    ### 🧠 Guía de razonamiento estratégico (Niveles $k$):
+                    * **Nivel 0 (Ingenuo / Aleatorio):** Las personas eligen números al azar entre 0 y 100. El promedio esperado sería alrededor de **50**.
+                    * **Nivel 1 (Primer orden de deducción):** Si crees que los demás jugarán al azar (promedio 50), deberías jugar: $\\frac{2}{3} \\times 50 \\approx \\mathbf{33.3}$
+                    * **Nivel 2 (Segundo orden):** Si piensas que los demás son listos y jugarán 33.3, deberías anticiparte jugando: $\\frac{2}{3} \\times 33.3 \\approx \\mathbf{22.2}$
+                    * **Nivel 3:** Si todos hacen lo anterior: $\\frac{2}{3} \\times 22.2 \\approx \\mathbf{14.8}$
+                    * **Equilibrio de Nash (Racionalidad común infinita):** Si este proceso se repite infinitas veces, el único número donde nadie tiene incentivos a desviarse es el **0**.
 
-                        > ⚠️ **¡Pero cuidado!** En el mundo real no todos son perfectamente racionales. Si tú juegas 0 pero el resto juega 50, ¡perderás! Tu reto es predecir la profundidad de pensamiento de tus compañeros hoy.
-                        """)
-                    
-                else:
-                    n = len(df)
-                    fondo_total = df["decision"].sum() * 1.6
-                    retorno_individual = fondo_total / n
-                    df["pago_final"] = (20 - df["decision"]) + retorno_individual
-                    
-                    c1, c2, c3 = st.columns(3)
-                    c1.metric("Aporte promedio", f"${df['decision'].mean():.2f} / $20")
-                    c2.metric("Fondo común multiplicado (1.6x)", f"${fondo_total:.2f}")
-                    c3.metric("Pago promedio final por estudiante", f"${df['pago_final'].mean():.2f}")
-                    
-                    fig = px.bar(
-                        df.sort_values("pago_final", ascending=False),
-                        x="estudiante", y=["decision", "pago_final"],
-                        barmode="group",
-                        title="Comparación: Aporte individual vs. Pago Final obtenido",
-                        labels={"value": "Dólares ($)", "variable": "Concepto", "estudiante": "Estudiante"}
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-                    
-                    with st.expander("🎓 Análisis pedagógico: El Dilema del Polizón (Free-Rider)"):
-                        st.markdown("""
-                        * Aquellos estudiantes con **menor aporte** y **mayor pago final** explotaron con éxito la estrategia de *Free-Rider* (polizón).
-                        * El grupo en su conjunto maximiza ganancias cuando la cooperación es del 100% (todos aportan $20 y obtienen $32).
-                        * En experimentos repetidos sin castigo, la cooperación tiende a decaer ronda tras ronda porque los cooperadores se sienten explotados por los polizones.
-                        """)
-                    
+                    > ⚠️ **¡Pero cuidado!** En el mundo real no todos son perfectamente racionales. Si tú juegas 0 pero el resto juega 50, ¡perderás! Tu reto es predecir la profundidad de pensamiento de tus compañeros hoy.
+                    """)
+
                 if len(df_hist) > 1:
-                    st.subheader("📈 Evolución a lo largo de las rondas")
+                    st.subheader("📈 Evolución a lo largo de las rondas (Convergencia hacia Nash)")
                     fig_evol = px.line(
                         df_hist, x="ronda", y="promedio", markers=True,
-                        title="Evolución del Promedio por Ronda (Dinámica de Aprendizaje)",
+                        title="Convergencia del Promedio hacia el Equilibrio de Nash",
                         labels={"ronda": "Ronda", "promedio": "Promedio de la decisión"}
                     )
                     st.plotly_chart(fig_evol, use_container_width=True)
@@ -561,8 +474,8 @@ else:
                         "estudiante": "Nombre y Apellido",
                         "cedula": "Cédula",
                         "universidad": "Universidad",
-                        "decision": "Decisión",
-                        "pago_final": "Pago Final ($)"
+                        "decision": "Número Elegido",
+                        "distancia": "Distancia a la Meta"
                     }
                     df_mostrar = df_mostrar.rename(columns={k: v for k, v in col_map.items() if k in df_mostrar.columns})
                     st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
