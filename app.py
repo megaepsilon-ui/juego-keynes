@@ -114,11 +114,10 @@ if rol == "👨‍🎓 Estudiante":
     st.title("🎯 Concurso de Belleza de Keynes")
     st.caption(f"Experimento de Teoría de Juegos (2/3 del promedio) — **Máximo {MAX_RONDAS} rondas**")
     
-    # --- PESTAÑAS: JUEGO / GUÍA Y EXPLICACIÓN / CALCULADORA DE ESTRATEGIA ---
-    tab_jugar, tab_guia, tab_simulador = st.tabs([
+    # --- PESTAÑAS: JUEGO / GUÍA Y EXPLICACIÓN ---
+    tab_jugar, tab_guia = st.tabs([
         "📝 Realizar mi Jugada",
-        "📖 Explicación y Reglas del Juego",
-        "💡 Simulador de Estrategia"
+        "📖 Explicación y Reglas del Juego"
     ])
     
     # ------------------ PESTAÑA 2: GUÍA Y EXPLICACIÓN ------------------
@@ -145,17 +144,6 @@ if rol == "👨‍🎓 Estudiante":
         * Tu reto es **anticipar la mentalidad y comportamiento de tus compañeros**: adivinar qué número jugarán en promedio y posicionarte estratégicamente a **2/3 de ese promedio**.
         * ¿Qué número crees que elegirá la mayoría en esta ronda?
         """)
-    
-    # ------------------ PESTAÑA 3: SIMULADOR DE ESTRATEGIA ------------------
-    with tab_simulador:
-        st.subheader("💡 Simulador para el Concurso de Belleza")
-        st.write("Prueba qué número deberías jugar según lo que proyectas que hará el grupo:")
-        
-        est_promedio = st.slider("¿Cuál crees que será el promedio de la clase?", min_value=0.0, max_value=100.0, value=45.0, step=1.0)
-        meta_calculada = (2 / 3) * est_promedio
-        
-        st.info(f"👉 Si el promedio resulta ser **{est_promedio:.1f}**, la meta exacta ganadora será: **{meta_calculada:.2f}**")
-        st.caption("Pista: Recuerda ajustar tu número según cuántos niveles de deducción creas que aplicarán tus compañeros en esta ronda.")
     
     # ------------------ PESTAÑA 1: FORMULARIO DE JUGADA ------------------
     with tab_jugar:
