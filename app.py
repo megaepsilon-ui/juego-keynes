@@ -46,10 +46,19 @@ def init_db():
                 juego TEXT,
                 ronda INTEGER,
                 estudiante TEXT,
+                cedula TEXT,
+                universidad TEXT,
                 decision REAL,
-                UNIQUE(juego, ronda, estudiante)
+                UNIQUE(juego, ronda, cedula)
             )
         """)
+        # Migración automática si la tabla fue creada previamente sin estas columnas
+        cursor = conn.execute("PRAGMA table_info(respuestas)")
+        cols = [c[1] for c in cursor.fetchall()]
+        if "cedula" not in cols:
+            conn.execute("ALTER TABLE respuestas ADD COLUMN cedula TEXT")
+        if "universidad" not in cols:
+            conn.execute("ALTER TABLE respuestas ADD COLUMN universidad TEXT")
 init_db()
 
 # --- BARRA LATERAL: CONFIGURACIÓN ---
@@ -167,38 +176,59 @@ if rol == "👨‍🎓 Estudiante":
     
     # ------------------ PESTAÑA 1: FORMULARIO DE JUGADA ------------------
     with tab_jugar:
-        if "nombre_estudiante" not in st.session_state:
-            st.session_state["nombre_estudiante"] = ""
-            
-        col_nom, col_btn = st.columns([3, 1])
-        with col_nom:
-            nombre_input = st.text_input(
-                "👤 Tu nombre completo o código de estudiante:",
-                value=st.session_state["nombre_estudiante"],
-                placeholder="Ej: Juan Pérez / 20261001",
-                help="Tu progreso se guardará automáticamente con este nombre."
-            ).strip()
-            
-        if nombre_input != st.session_state["nombre_estudiante"]:
-            st.session_state["nombre_estudiante"] = nombre_input
-            st.rerun()
+        if "est_registrado" not in st.session_state:
+            st.session_state["est_registrado"] = False
+            st.session_state["est_nombre"] = ""
+            st.session_state["est_cedula"] = ""
+            st.session_state["est_universidad"] = "Escuela Politécnica Nacional"
 
-        estudiante = st.session_state["nombre_estudiante"]
-
-        if not estudiante:
-            st.info("👋 Ingresa tu nombre o código en el campo de arriba para comenzar a jugar.")
+        if not st.session_state["est_registrado"]:
+            st.subheader("📋 Registro de Participante")
+            st.write("Completa tus datos para habilitar tus decisiones en el laboratorio:")
+            
+            with st.form("form_registro_estudiante"):
+                nombre_in = st.text_input("1. Nombre y Apellido:", placeholder="Ej: Juan Pérez").strip()
+                cedula_in = st.text_input("2. Cédula (10 dígitos):", max_chars=10, placeholder="Ej: 1712345678").strip()
+                universidad_in = st.selectbox(
+                    "3. Universidad:",
+                    [
+                        "Escuela Politécnica Nacional",
+                        "Universidad de las Fuerzas Armadas",
+                        "Universidad San Francisco de Quito"
+                    ]
+                )
+                btn_registro = st.form_submit_button("✅ Guardar y Comenzar a Jugar", use_container_width=True)
+                
+                if btn_registro:
+                    if not nombre_in:
+                        st.error("⚠️ Por favor ingresa tu Nombre y Apellido.")
+                    elif not (len(cedula_in) == 10 and cedula_in.isdigit()):
+                        st.error("⚠️ La cédula debe contener exactamente 10 dígitos numéricos.")
+                    else:
+                        st.session_state["est_nombre"] = nombre_in
+                        st.session_state["est_cedula"] = cedula_in
+                        st.session_state["est_universidad"] = universidad_in
+                        st.session_state["est_registrado"] = True
+                        st.rerun()
         else:
+            estudiante = st.session_state["est_nombre"]
+            cedula = st.session_state["est_cedula"]
+            universidad = st.session_state["est_universidad"]
+
+            col_info, col_btn = st.columns([3, 1])
+            with col_info:
+                st.info(f"👤 **{estudiante}** | 🪪 Cédula: **{cedula}** | 🏛️ **{universidad}**")
             with col_btn:
-                st.write("")
-                st.write("")
-                if st.button("🔄 Cambiar jugador"):
-                    st.session_state["nombre_estudiante"] = ""
+                if st.button("🔄 Cambiar datos / Jugador"):
+                    st.session_state["est_registrado"] = False
+                    st.session_state["est_nombre"] = ""
+                    st.session_state["est_cedula"] = ""
                     st.rerun()
 
             with get_conn() as conn:
                 res = conn.execute(
-                    "SELECT ronda, decision FROM respuestas WHERE juego = ? AND estudiante = ? ORDER BY ronda ASC",
-                    (juego, estudiante)
+                    "SELECT ronda, decision FROM respuestas WHERE juego = ? AND cedula = ? ORDER BY ronda ASC",
+                    (juego, cedula)
                 ).fetchall()
             
             rondas_jugadas = [r[0] for r in res]
@@ -250,8 +280,8 @@ if rol == "👨‍🎓 Estudiante":
                         try:
                             with get_conn() as conn:
                                 conn.execute(
-                                    "INSERT INTO respuestas (juego, ronda, estudiante, decision) VALUES (?, ?, ?, ?)",
-                                    (juego, ronda_actual, estudiante, float(decision))
+                                    "INSERT INTO respuestas (juego, ronda, estudiante, cedula, universidad, decision) VALUES (?, ?, ?, ?, ?, ?)",
+                                    (juego, ronda_actual, estudiante, cedula, universidad, float(decision))
                                 )
                             if ronda_actual < MAX_RONDAS:
                                 st.success(f"✅ ¡Ronda {ronda_actual} enviada! Avanzando automáticamente a la Ronda {ronda_actual + 1}...")
@@ -260,7 +290,7 @@ if rol == "👨‍🎓 Estudiante":
                                 st.success(f"🎉 ¡Todas las {MAX_RONDAS} rondas han sido completadas!")
                             st.rerun()
                         except sqlite3.IntegrityError:
-                            st.warning(f"Ya se había registrado una respuesta para la Ronda {ronda_actual}.")
+                            st.warning(f"Ya se había registrado una respuesta para la Ronda {ronda_actual} con tu cédula.")
 
 # ==============================================================================
 # VISTA DEL PROFESOR (PROYECTOR)
@@ -278,11 +308,11 @@ else:
     if clave == docente_password:
         with get_conn() as conn:
             df = pd.read_sql_query(
-                "SELECT estudiante, decision FROM respuestas WHERE juego = ? AND ronda = ?",
+                "SELECT estudiante, cedula, universidad, decision FROM respuestas WHERE juego = ? AND ronda = ?",
                 conn, params=(juego, ronda)
             )
             df_hist = pd.read_sql_query(
-                "SELECT ronda, AVG(decision) as promedio, COUNT(estudiante) as participantes FROM respuestas WHERE juego = ? GROUP BY ronda ORDER BY ronda",
+                "SELECT ronda, AVG(decision) as promedio, COUNT(DISTINCT coalesce(cedula, estudiante)) as participantes FROM respuestas WHERE juego = ? GROUP BY ronda ORDER BY ronda",
                 conn, params=(juego,)
             )
         
@@ -358,7 +388,12 @@ else:
                     c1, c2, c3 = st.columns(3)
                     c1.metric("Promedio de la clase", f"{promedio:.2f}")
                     c2.metric("Meta (2/3 del promedio)", f"{meta:.2f}")
-                    nombres_ganadores = ", ".join([f"{row['estudiante']} ({row['decision']:.1f})" for _, row in ganadores.iterrows()])
+                    nombres_ganadores = ", ".join([
+                        f"{row['estudiante']} ({row['universidad']}) — {row['decision']:.1f}" 
+                        if pd.notna(row.get('universidad')) and row.get('universidad') 
+                        else f"{row['estudiante']} ({row['decision']:.1f})" 
+                        for _, row in ganadores.iterrows()
+                    ])
                     c3.metric("🏆 Ganador(es)", nombres_ganadores)
                     
                     fig = px.histogram(
@@ -425,7 +460,16 @@ else:
                     st.plotly_chart(fig_evol, use_container_width=True)
                     
                 with st.expander("📋 Ver tabla completa de registros de la ronda"):
-                    st.dataframe(df, use_container_width=True)
+                    df_mostrar = df.copy()
+                    col_map = {
+                        "estudiante": "Nombre y Apellido",
+                        "cedula": "Cédula",
+                        "universidad": "Universidad",
+                        "decision": "Decisión",
+                        "pago_final": "Pago Final ($)"
+                    }
+                    df_mostrar = df_mostrar.rename(columns={k: v for k, v in col_map.items() if k in df_mostrar.columns})
+                    st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
                     
         st.sidebar.divider()
         st.sidebar.subheader("⚙️ Control de Partida")
