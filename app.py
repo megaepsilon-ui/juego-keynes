@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 import plotly.express as px
+import io
+import urllib.parse
 
 st.set_page_config(
     page_title="Laboratorio de Teoría de Juegos | EPN",
@@ -11,6 +13,26 @@ st.set_page_config(
 )
 
 MAX_RONDAS = 5
+DEFAULT_APP_URL = st.secrets.get("APP_URL", "https://juego-keynes.streamlit.app")
+
+def generar_qr(url):
+    try:
+        import qrcode
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=10,
+            border=2,
+        )
+        qr.add_data(url)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        return buf.getvalue()
+    except Exception:
+        encoded = urllib.parse.quote_plus(url)
+        return f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={encoded}"
 
 # --- CONEXIÓN Y BASE DE DATOS LOCAL ---
 def get_conn():
@@ -39,6 +61,14 @@ juego = st.sidebar.selectbox("Juego activo:", [
     "p-Beauty Contest (2/3 del promedio)",
     "Juego de Bienes Públicos"
 ])
+
+if "app_url" not in st.session_state:
+    st.session_state["app_url"] = DEFAULT_APP_URL
+
+with st.sidebar.popover("📲 Código QR para ingresar", use_container_width=True):
+    st.markdown("##### 📱 Escanea con tu celular")
+    st.image(generar_qr(st.session_state["app_url"]), caption="Acceso al juego", use_container_width=True)
+    st.caption(f"[{st.session_state['app_url']}]({st.session_state['app_url']})")
 
 # ==============================================================================
 # VISTA DEL ESTUDIANTE
@@ -287,6 +317,27 @@ else:
             count_r = df_hist[df_hist["ronda"] == r_num]["participantes"].values
             val = int(count_r[0]) if len(count_r) > 0 else 0
             r_cols[r_num - 1].metric(f"Ronda {r_num}", f"{val} alumnos")
+
+        # Código QR para que los estudiantes escaneen desde el proyector
+        with st.expander("📲 Código QR para que los estudiantes ingresen con su celular", expanded=True):
+            col_qr1, col_qr2 = st.columns([1, 2])
+            with col_qr1:
+                st.image(generar_qr(st.session_state["app_url"]), caption="Escanea para unirte a la partida", width=200)
+            with col_qr2:
+                st.markdown("#### 📱 ¡Únete al juego desde tu celular!")
+                st.markdown("""
+                * Apunta con la **cámara de tu teléfono** al código QR para ingresar directamente a la sala.
+                * No necesitas instalar ninguna aplicación.
+                """)
+                url_editada = st.text_input(
+                    "🔗 Enlace web del juego (editable si cambia el dominio o IP):",
+                    value=st.session_state["app_url"],
+                    key="input_url_qr"
+                )
+                if url_editada != st.session_state["app_url"]:
+                    st.session_state["app_url"] = url_editada
+                    st.rerun()
+                st.markdown(f"👉 **Enlace directo:** [{st.session_state['app_url']}]({st.session_state['app_url']})")
                 
         revelar = st.toggle("🔓 Revelar resultados y gráficos en pantalla (Proyector)", value=False)
         
