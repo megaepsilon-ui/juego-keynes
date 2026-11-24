@@ -52,6 +52,13 @@ def init_db():
                 UNIQUE(juego, ronda, cedula)
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS estado_sesion (
+                juego TEXT PRIMARY KEY,
+                ronda_activa INTEGER DEFAULT 1,
+                estado TEXT DEFAULT 'abierta'
+            )
+        """)
         # Migración automática si la tabla fue creada previamente sin estas columnas
         cursor = conn.execute("PRAGMA table_info(respuestas)")
         cols = [c[1] for c in cursor.fetchall()]
@@ -60,6 +67,28 @@ def init_db():
         if "universidad" not in cols:
             conn.execute("ALTER TABLE respuestas ADD COLUMN universidad TEXT")
 init_db()
+
+def get_estado_sesion(juego):
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT ronda_activa, estado FROM estado_sesion WHERE juego = ?",
+            (juego,)
+        ).fetchone()
+        if not row:
+            conn.execute(
+                "INSERT INTO estado_sesion (juego, ronda_activa, estado) VALUES (?, 1, 'abierta')",
+                (juego,)
+            )
+            return 1, "abierta"
+        return int(row[0]), str(row[1])
+
+def set_estado_sesion(juego, ronda, estado):
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO estado_sesion (juego, ronda_activa, estado)
+            VALUES (?, ?, ?)
+            ON CONFLICT(juego) DO UPDATE SET ronda_activa=excluded.ronda_activa, estado=excluded.estado
+        """, (juego, ronda, estado))
 
 # --- BARRA LATERAL: CONFIGURACIÓN ---
 st.sidebar.image("https://upload.wikimedia.org/wikipedia/commons/8/8c/Escudo_de_la_Escuela_Polit%C3%A9cnica_Nacional.png", width=90)
@@ -225,34 +254,59 @@ if rol == "👨‍🎓 Estudiante":
                     st.session_state["est_cedula"] = ""
                     st.rerun()
 
+            ronda_activa, estado_sesion = get_estado_sesion(juego)
+
             with get_conn() as conn:
                 res = conn.execute(
                     "SELECT ronda, decision FROM respuestas WHERE juego = ? AND cedula = ? ORDER BY ronda ASC",
                     (juego, cedula)
                 ).fetchall()
+                jugada_actual = conn.execute(
+                    "SELECT decision FROM respuestas WHERE juego = ? AND ronda = ? AND cedula = ?",
+                    (juego, ronda_activa, cedula)
+                ).fetchone()
             
             rondas_jugadas = [r[0] for r in res]
             
-            if len(rondas_jugadas) >= MAX_RONDAS:
+            # Caso 1: Ha completado todas las rondas o el profesor finalizó el juego
+            if len(rondas_jugadas) >= MAX_RONDAS or ronda_activa > MAX_RONDAS:
                 st.success(f"🎉 **¡Excelente, {estudiante}! Has completado las {MAX_RONDAS} rondas del juego.**")
                 st.progress(1.0)
-                st.info("Has alcanzado el límite de 5 rondas. Presta atención al proyector para ver las estadísticas y los resultados de toda la clase.")
+                st.info("Has alcanzado el límite de 5 rondas. Presta atención al proyector para ver el análisis de resultados.")
                 
                 df_resumen = pd.DataFrame(res, columns=["Ronda", "Tu Decisión"])
                 st.subheader("📋 Resumen de tus decisiones:")
                 st.dataframe(df_resumen, use_container_width=True, hide_index=True)
+            
+            # Caso 2: Ya envió la respuesta para la ronda activa
+            elif jugada_actual is not None:
+                st.markdown(f"### 📍 Ronda **{ronda_activa}** de **{MAX_RONDAS}**")
+                st.progress(ronda_activa / MAX_RONDAS)
+                st.success(f"✅ ¡Tu jugada para la **Ronda {ronda_activa}** ya fue registrada! (Tu decisión: **{jugada_actual[0]:.1f}**)")
+                st.info("👀 **Presta atención al proyector de la clase:** El profesor proyectará los resultados, el promedio y la meta ganadora de esta ronda.")
+                st.caption("Cuando el profesor abra la siguiente ronda, tu pantalla se habilitará automáticamente.")
+                if st.button("🔄 Comprobar si ya inició la siguiente ronda", use_container_width=True):
+                    st.rerun()
+
+            # Caso 3: La ronda activa está cerrada por el profesor
+            elif estado_sesion == "cerrada":
+                st.markdown(f"### 📍 Ronda **{ronda_activa}** de **{MAX_RONDAS}**")
+                st.warning(f"🔒 La **Ronda {ronda_activa}** está cerrada temporalmente para nuevas respuestas.")
+                st.info("👀 Observa el proyector de la clase para ver el debate y los resultados. Espera a que el docente habilite la siguiente ronda.")
+                if st.button("🔄 Comprobar si ya abrió la siguiente ronda", use_container_width=True):
+                    st.rerun()
+
+            # Caso 4: Ronda activa abierta y el alumno aún no ha jugado
             else:
-                ronda_actual = min([r for r in range(1, MAX_RONDAS + 1) if r not in rondas_jugadas])
+                st.markdown(f"### 📍 Ronda **{ronda_activa}** de **{MAX_RONDAS}**")
+                st.progress((ronda_activa - 1) / MAX_RONDAS)
                 
-                st.markdown(f"### 📍 Ronda **{ronda_actual}** de **{MAX_RONDAS}**")
-                st.progress((ronda_actual - 1) / MAX_RONDAS)
-                
-                with st.form(f"form_jugada_{ronda_actual}"):
+                with st.form(f"form_jugada_{ronda_activa}"):
                     if "Beauty" in juego:
                         st.markdown("#### Selecciona tu número estratégico")
                         st.write("Debes escoger un valor entre **0 y 100**. Ganará quien esté más cerca de **2/3 del promedio** de toda la clase.")
                         decision = st.number_input(
-                            f"Tu número para la Ronda {ronda_actual}:",
+                            f"Tu número para la Ronda {ronda_activa}:",
                             min_value=0.0,
                             max_value=100.0,
                             value=33.3,
@@ -263,7 +317,7 @@ if rol == "👨‍🎓 Estudiante":
                         st.markdown("#### Decide tu contribución al Bien Público")
                         st.write("Tienes una dotación inicial de **$20**. ¿Cuánto deseas aportar al fondo común?")
                         decision = st.slider(
-                            f"Tu aporte en la Ronda {ronda_actual} ($):",
+                            f"Tu aporte en la Ronda {ronda_activa} ($):",
                             min_value=0.0,
                             max_value=20.0,
                             value=10.0,
@@ -273,7 +327,7 @@ if rol == "👨‍🎓 Estudiante":
                         st.caption(f"Te quedas con **${20 - decision:.2f}** seguros y aportas **${decision:.2f}** al beneficio común.")
                         
                     st.divider()
-                    texto_boton = f"🚀 Confirmar y Enviar Ronda {ronda_actual}" if ronda_actual < MAX_RONDAS else "🏁 Confirmar y Finalizar Ronda 5"
+                    texto_boton = f"🚀 Confirmar y Enviar Ronda {ronda_activa}" if ronda_activa < MAX_RONDAS else "🏁 Confirmar y Finalizar Ronda 5"
                     enviado = st.form_submit_button(texto_boton, use_container_width=True)
                     
                     if enviado:
@@ -281,22 +335,26 @@ if rol == "👨‍🎓 Estudiante":
                             with get_conn() as conn:
                                 conn.execute(
                                     "INSERT INTO respuestas (juego, ronda, estudiante, cedula, universidad, decision) VALUES (?, ?, ?, ?, ?, ?)",
-                                    (juego, ronda_actual, estudiante, cedula, universidad, float(decision))
+                                    (juego, ronda_activa, estudiante, cedula, universidad, float(decision))
                                 )
-                            if ronda_actual < MAX_RONDAS:
-                                st.success(f"✅ ¡Ronda {ronda_actual} enviada! Avanzando automáticamente a la Ronda {ronda_actual + 1}...")
-                            else:
-                                st.balloons()
-                                st.success(f"🎉 ¡Todas las {MAX_RONDAS} rondas han sido completadas!")
+                            st.success(f"✅ ¡Jugada de la Ronda {ronda_activa} enviada!")
                             st.rerun()
                         except sqlite3.IntegrityError:
-                            st.warning(f"Ya se había registrado una respuesta para la Ronda {ronda_actual} con tu cédula.")
+                            st.warning(f"Ya se había registrado una respuesta para la Ronda {ronda_activa} con tu cédula.")
 
 # ==============================================================================
 # VISTA DEL PROFESOR (PROYECTOR)
 # ==============================================================================
 else:
-    ronda = st.sidebar.number_input("Ronda a proyectar:", min_value=1, max_value=MAX_RONDAS, value=1, step=1)
+    ronda_activa_global, estado_sesion_global = get_estado_sesion(juego)
+    ronda = st.sidebar.number_input(
+        "Ronda a proyectar:",
+        min_value=1,
+        max_value=MAX_RONDAS,
+        value=min(ronda_activa_global, MAX_RONDAS),
+        step=1,
+        help="Selecciona qué ronda deseas proyectar en pantalla."
+    )
     
     st.title(f"📊 Panel de Control del Profesor: {juego}")
     st.caption(f"Visualización central para proyector — **Ronda {ronda} de {MAX_RONDAS}**")
@@ -306,6 +364,8 @@ else:
     clave = st.sidebar.text_input("Contraseña docente:", type="password")
     
     if clave == docente_password:
+        ronda_activa, estado_sesion = get_estado_sesion(juego)
+
         with get_conn() as conn:
             df = pd.read_sql_query(
                 "SELECT estudiante, cedula, universidad, decision FROM respuestas WHERE juego = ? AND ronda = ?",
@@ -315,10 +375,40 @@ else:
                 "SELECT ronda, AVG(decision) as promedio, COUNT(DISTINCT coalesce(cedula, estudiante)) as participantes FROM respuestas WHERE juego = ? GROUP BY ronda ORDER BY ronda",
                 conn, params=(juego,)
             )
+
+        # CONTROL CENTRALIZADO DE RONDAS (SINCRONIZACIÓN DE CLASE)
+        st.subheader("🎛️ Control Central de Rondas (Sincronizado con la clase)")
+        with st.container(border=True):
+            col_c1, col_c2, col_c3 = st.columns([1, 1, 2])
+            col_c1.metric("📍 Ronda activa en clase", f"Ronda {ronda_activa} de {MAX_RONDAS}")
+            estado_texto = "🟢 ABIERTA (Recibiendo jugadas)" if estado_sesion == "abierta" else "🔴 CERRADA (En discusión)"
+            col_c2.metric("📡 Estado para alumnos", estado_texto)
+            
+            with col_c3:
+                st.write("**Acciones para sincronizar la clase:**")
+                b_col1, b_col2 = st.columns(2)
+                with b_col1:
+                    if estado_sesion == "abierta":
+                        if st.button(f"🔒 Cerrar Ronda {ronda_activa} y Revelar", type="primary", use_container_width=True):
+                            set_estado_sesion(juego, ronda_activa, "cerrada")
+                            st.session_state["revelar_resultados"] = True
+                            st.rerun()
+                    else:
+                        if st.button(f"🔓 Reabrir Ronda {ronda_activa}", use_container_width=True):
+                            set_estado_sesion(juego, ronda_activa, "abierta")
+                            st.rerun()
+                with b_col2:
+                    if ronda_activa < MAX_RONDAS:
+                        if st.button(f"➡️ Abrir Ronda {ronda_activa + 1}", type="secondary", use_container_width=True):
+                            set_estado_sesion(juego, ronda_activa + 1, "abierta")
+                            st.session_state["revelar_resultados"] = False
+                            st.rerun()
+                    else:
+                        st.info("🏁 5 rondas completadas")
         
         # Métricas de participación y controles rápidos
         c_status1, c_status2, c_status3, c_status4 = st.columns([1, 1, 1, 1])
-        c_status1.metric("👥 Respuestas en ronda", len(df))
+        c_status1.metric("👥 Respuestas en ronda proyectada", len(df))
         c_status2.metric("🔄 Ronda proyectada", f"Ronda {ronda} de {MAX_RONDAS}")
         with c_status3:
             st.write("")
@@ -332,12 +422,17 @@ else:
                 if st.button("🧹 Reiniciar juego activo", use_container_width=True, key="main_reset_juego"):
                     with get_conn() as conn:
                         conn.execute("DELETE FROM respuestas WHERE juego = ?", (juego,))
-                    st.success(f"Respuestas de '{juego}' eliminadas.")
+                    set_estado_sesion(juego, 1, "abierta")
+                    st.session_state["revelar_resultados"] = False
+                    st.success(f"Respuestas de '{juego}' eliminadas. Ronda 1 abierta.")
                     st.rerun()
                 st.divider()
                 if st.button("⚠️ Borrar toda la base", use_container_width=True, key="main_reset_todo"):
                     with get_conn() as conn:
                         conn.execute("DELETE FROM respuestas")
+                        conn.execute("DELETE FROM estado_sesion")
+                    set_estado_sesion(juego, 1, "abierta")
+                    st.session_state["revelar_resultados"] = False
                     st.success("Toda la base de datos ha sido borrada.")
                     st.rerun()
 
@@ -371,7 +466,8 @@ else:
                 st.markdown(f"👉 **Enlace directo:** [{st.session_state['app_url']}]({st.session_state['app_url']})")
         st.divider()
                 
-        revelar = st.toggle("🔓 Revelar resultados y gráficos en pantalla (Proyector)", value=False)
+        revelar_defecto = st.session_state.get("revelar_resultados", estado_sesion == "cerrada")
+        revelar = st.toggle("🔓 Revelar resultados y gráficos en pantalla (Proyector)", value=revelar_defecto)
         
         if revelar:
             if df.empty:
@@ -478,11 +574,16 @@ else:
             if st.button("🧹 Reiniciar juego activo", use_container_width=True, key="sb_reset_current"):
                 with get_conn() as conn:
                     conn.execute("DELETE FROM respuestas WHERE juego = ?", (juego,))
-                st.success(f"'{juego}' reiniciado con éxito.")
+                set_estado_sesion(juego, 1, "abierta")
+                st.session_state["revelar_resultados"] = False
+                st.success(f"'{juego}' reiniciado con éxito. Ronda 1 abierta.")
                 st.rerun()
             if st.button("⚠️ Borrar toda la base de datos", use_container_width=True, key="sb_reset_all"):
                 with get_conn() as conn:
                     conn.execute("DELETE FROM respuestas")
+                    conn.execute("DELETE FROM estado_sesion")
+                set_estado_sesion(juego, 1, "abierta")
+                st.session_state["revelar_resultados"] = False
                 st.success("Laboratorio reiniciado por completo.")
                 st.rerun()
     else:
