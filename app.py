@@ -4,6 +4,7 @@ import sqlite3
 import plotly.express as px
 import io
 import urllib.parse
+import random
 
 st.set_page_config(
     page_title="Laboratorio de Teoría de Juegos | EPN",
@@ -243,6 +244,10 @@ if rol == "👨‍🎓 Estudiante":
                 st.markdown(f"### 📍 Ronda **{ronda_activa}** de **{MAX_RONDAS}**")
                 st.progress((ronda_activa - 1) / MAX_RONDAS)
                 
+                key_def = f"def_val_{ronda_activa}"
+                if key_def not in st.session_state:
+                    st.session_state[key_def] = round(random.uniform(10.0, 90.0), 1)
+                
                 with st.form(f"form_jugada_{ronda_activa}"):
                     st.markdown("#### Selecciona tu número estratégico (0.0 - 100.0)")
                     st.write("Debes escoger un valor entre **0 y 100**. Ganará quien esté más cerca de **2/3 del promedio** de toda la clase.")
@@ -250,7 +255,7 @@ if rol == "👨‍🎓 Estudiante":
                         f"Tu número para la Ronda {ronda_activa}:",
                         min_value=0.0,
                         max_value=100.0,
-                        value=33.3,
+                        value=float(st.session_state[key_def]),
                         step=0.1,
                         help="Ingresa el valor que crees que igualará 2/3 del promedio de todos."
                     )
