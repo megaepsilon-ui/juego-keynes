@@ -13,7 +13,7 @@ st.set_page_config(
 )
 
 MAX_RONDAS = 5
-DEFAULT_APP_URL = st.secrets.get("APP_URL", "https://juego-keynes.streamlit.app")
+DEFAULT_APP_URL = st.secrets.get("APP_URL", "https://juego-keynes-epn.streamlit.app/")
 
 def generar_qr(url):
     try:
