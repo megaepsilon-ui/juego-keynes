@@ -281,17 +281,13 @@ if rol == "👨‍🎓 Estudiante":
 # ==============================================================================
 else:
     ronda_activa_global, estado_sesion_global = get_estado_sesion(juego)
-    ronda = st.sidebar.number_input(
-        "Ronda a proyectar:",
-        min_value=1,
-        max_value=MAX_RONDAS,
-        value=min(ronda_activa_global, MAX_RONDAS),
-        step=1,
-        help="Selecciona qué ronda deseas proyectar en pantalla."
-    )
+    if "ronda_proyectada" not in st.session_state:
+        st.session_state["ronda_proyectada"] = min(ronda_activa_global, MAX_RONDAS)
     
-    st.title(f"📊 Panel de Control del Profesor: {juego}")
-    st.caption(f"Visualización central para proyector — **Ronda {ronda} de {MAX_RONDAS}**")
+    ronda = st.session_state["ronda_proyectada"]
+    
+    st.title("📊 Panel de Control del Profesor")
+    st.caption(f"Visualización central para proyector — **Mostrando Ronda {ronda} de {MAX_RONDAS}**")
     
     # Obtener contraseña desde secrets si existe, o usar predeterminada
     docente_password = st.secrets.get("DOCENTE_PASSWORD", "epn2026")
@@ -335,6 +331,7 @@ else:
                     if ronda_activa < MAX_RONDAS:
                         if st.button(f"➡️ Abrir Ronda {ronda_activa + 1}", type="secondary", use_container_width=True):
                             set_estado_sesion(juego, ronda_activa + 1, "abierta")
+                            st.session_state["ronda_proyectada"] = ronda_activa + 1
                             st.session_state["revelar_resultados"] = False
                             st.rerun()
                     else:
@@ -370,12 +367,28 @@ else:
                     st.success("Toda la base de datos ha sido borrada.")
                     st.rerun()
 
-        # Resumen de participación en las 5 rondas
+        # Recuadros interactivos como botones para elegir la ronda a proyectar
+        st.markdown("##### 📌 Selecciona la ronda que deseas proyectar en pantalla:")
         r_cols = st.columns(MAX_RONDAS)
         for r_num in range(1, MAX_RONDAS + 1):
             count_r = df_hist[df_hist["ronda"] == r_num]["participantes"].values
             val = int(count_r[0]) if len(count_r) > 0 else 0
-            r_cols[r_num - 1].metric(f"Ronda {r_num}", f"{val} alumnos")
+            es_sel = (r_num == ronda)
+            texto_alumnos = f"{val} alumno" if val == 1 else f"{val} alumnos"
+            
+            with r_cols[r_num - 1]:
+                with st.container(border=True):
+                    st.metric(f"Ronda {r_num}", texto_alumnos)
+                    texto_btn = "👁️ Proyectando" if es_sel else f"Ver Ronda {r_num}"
+                    if st.button(
+                        texto_btn,
+                        key=f"btn_ronda_sel_{r_num}",
+                        use_container_width=True,
+                        type="primary" if es_sel else "secondary"
+                    ):
+                        st.session_state["ronda_proyectada"] = r_num
+                        st.session_state["revelar_resultados"] = True
+                        st.rerun()
 
         # Código QR permanentemente visible para el proyector
         st.divider()
