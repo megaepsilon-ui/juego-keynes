@@ -7,6 +7,7 @@ import urllib.parse
 import random
 import os
 import base64
+from contextlib import contextmanager
 
 st.set_page_config(
     page_title="Laboratorio de Teoría de Juegos | DeC - EPN",
@@ -20,7 +21,7 @@ st.set_page_config(
 # - Azul Marino Primario (uk-section-primary / uk-button-primary): #18243E -> #190F47
 # - Naranja Terracota Secundario (uk-section-secondary / uk-button-secondary): #E96132 -> #F46318
 # - Púrpura Institucional de Títulos (uk-h1..h6): #3D1A4A
-# - Dorado DeC: #F0B840 | Rojo DeC: #E01818 | Texto cuerpo: #4A5568 / #868585
+# - Dorado DeC: #F0B840 | Rojo DeC: #E01818
 # - Tipografía oficial del portal: 'Varela Round'
 st.markdown("""
 <style>
@@ -115,8 +116,8 @@ st.markdown("""
     .dec-hero-banner {
         background: linear-gradient(125deg, #18243E 0%, #190F47 65%, #3D1A4A 100%);
         border-radius: 16px;
-        padding: 22px 28px;
-        margin-bottom: 20px;
+        padding: 20px 26px;
+        margin-bottom: 16px;
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -130,7 +131,7 @@ st.markdown("""
         display: inline-block;
         background: linear-gradient(45deg, #E96132 40%, #F46318);
         color: #FFFFFF !important;
-        font-size: 0.75rem;
+        font-size: 0.74rem;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.06em;
@@ -141,14 +142,14 @@ st.markdown("""
     .dec-hero-title {
         font-family: 'Varela Round', 'Segoe UI', sans-serif !important;
         color: #FFFFFF !important;
-        font-size: 1.85rem;
+        font-size: 1.8rem;
         font-weight: 700;
         margin: 0 0 4px 0 !important;
         line-height: 1.2;
     }
     .dec-hero-sub {
-        color: rgba(255, 255, 255, 0.85) !important;
-        font-size: 0.95rem;
+        color: rgba(255, 255, 255, 0.86) !important;
+        font-size: 0.94rem;
         margin: 0 !important;
     }
     .dec-hero-logo-box {
@@ -162,20 +163,55 @@ st.markdown("""
         justify-content: center;
     }
     .dec-hero-logo-box img {
-        height: 68px;
+        height: 66px;
         width: auto;
         display: block;
     }
+
+    /* --- INDICADOR DE LAS 6 ETAPAS DEL PROTOCOLO --- */
+    .dec-stepper {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 18px;
+    }
+    .dec-step {
+        flex: 1 1 130px;
+        padding: 8px 10px;
+        border-radius: 9px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        text-align: center;
+        background: #FFFFFF;
+        color: #64748B;
+        border: 1px solid #E2E8F0;
+    }
+    .dec-step.done {
+        background: #EEF2FA;
+        color: #18243E;
+        border-color: #CBD5E1;
+    }
+    .dec-step.active {
+        background: linear-gradient(45deg, #E96132 40%, #F46318);
+        color: #FFFFFF !important;
+        border-color: #E96132;
+        box-shadow: 0 4px 12px rgba(233, 97, 50, 0.32);
+    }
+
     @media (max-width: 640px) {
         .dec-hero-banner {
-            padding: 16px 18px;
-            flex-direction: row;
+            padding: 15px 16px;
         }
         .dec-hero-title {
-            font-size: 1.35rem;
+            font-size: 1.32rem;
         }
         .dec-hero-logo-box img {
-            height: 50px;
+            height: 48px;
+        }
+        .dec-step {
+            flex: 1 1 45%;
+            font-size: 0.72rem;
+            padding: 6px 8px;
         }
     }
 
@@ -291,6 +327,11 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+MAX_RONDAS = 5
+DEFAULT_CUPO = 20
+DEFAULT_APP_URL = st.secrets.get("APP_URL", "https://juego-keynes-epn.streamlit.app/")
+
+@st.cache_data
 def get_logo_b64():
     if os.path.exists("logo_dec.png"):
         with open("logo_dec.png", "rb") as f:
@@ -314,9 +355,22 @@ def render_encabezado_institucional(titulo, subtitulo):
     </div>
     """, unsafe_allow_html=True)
 
-MAX_RONDAS = 5
-DEFAULT_APP_URL = st.secrets.get("APP_URL", "https://juego-keynes-epn.streamlit.app/")
+def render_stepper(paso_activo):
+    pasos = [
+        (1, "1º Inscripción"),
+        (2, "2º Sala de Espera"),
+        (3, "3º Elegir Número"),
+        (4, "4º Esperar Jugadas"),
+        (5, "5º Resultados"),
+        (6, "6º Siguiente Ronda"),
+    ]
+    items_html = []
+    for num, texto in pasos:
+        cls = "active" if num == paso_activo else ("done" if num < paso_activo else "")
+        items_html.append(f'<div class="dec-step {cls}">{texto}</div>')
+    st.markdown(f'<div class="dec-stepper">{"".join(items_html)}</div>', unsafe_allow_html=True)
 
+@st.cache_data
 def generar_qr(url):
     try:
         import qrcode
@@ -336,12 +390,34 @@ def generar_qr(url):
         encoded = urllib.parse.quote_plus(url)
         return f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={encoded}"
 
-# --- CONEXIÓN Y BASE DE DATOS LOCAL ---
+# ==============================================================================
+# CONEXIÓN, ESQUEMA Y MÁQUINA DE ESTADOS SINCRONIZADA (6 ETAPAS)
+# ==============================================================================
+@contextmanager
 def get_conn():
-    return sqlite3.connect("juegos_clase.db", check_same_thread=False)
+    conn = sqlite3.connect("juegos_clase.db", check_same_thread=False, timeout=20)
+    conn.execute("PRAGMA journal_mode=WAL;")
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 def init_db():
     with get_conn() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS participantes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                juego TEXT,
+                cedula TEXT,
+                estudiante TEXT,
+                universidad TEXT,
+                UNIQUE(juego, cedula)
+            )
+        """)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS respuestas (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -355,109 +431,384 @@ def init_db():
             )
         """)
         conn.execute("""
+            CREATE TABLE IF NOT EXISTS listos_ronda (
+                juego TEXT,
+                ronda INTEGER,
+                cedula TEXT,
+                PRIMARY KEY (juego, ronda, cedula)
+            )
+        """)
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS estado_sesion (
                 juego TEXT PRIMARY KEY,
                 ronda_activa INTEGER DEFAULT 1,
-                estado TEXT DEFAULT 'abierta'
+                estado TEXT DEFAULT 'abierta',
+                fase TEXT DEFAULT 'inscripcion',
+                cupo_estudiantes INTEGER DEFAULT 20,
+                solo_profesor_avanza INTEGER DEFAULT 1
             )
         """)
-        # Migración automática si la tabla fue creada previamente sin estas columnas
-        cursor = conn.execute("PRAGMA table_info(respuestas)")
-        cols = [c[1] for c in cursor.fetchall()]
-        if "cedula" not in cols:
+        # Migraciones seguras si la base de datos proviene de una versión previa
+        cols_resp = [c[1] for c in conn.execute("PRAGMA table_info(respuestas)").fetchall()]
+        if "cedula" not in cols_resp:
             conn.execute("ALTER TABLE respuestas ADD COLUMN cedula TEXT")
-        if "universidad" not in cols:
+        if "universidad" not in cols_resp:
             conn.execute("ALTER TABLE respuestas ADD COLUMN universidad TEXT")
+
+        cols_est = [c[1] for c in conn.execute("PRAGMA table_info(estado_sesion)").fetchall()]
+        if "fase" not in cols_est:
+            conn.execute("ALTER TABLE estado_sesion ADD COLUMN fase TEXT DEFAULT 'inscripcion'")
+        if "cupo_estudiantes" not in cols_est:
+            conn.execute(f"ALTER TABLE estado_sesion ADD COLUMN cupo_estudiantes INTEGER DEFAULT {DEFAULT_CUPO}")
+        if "solo_profesor_avanza" not in cols_est:
+            conn.execute("ALTER TABLE estado_sesion ADD COLUMN solo_profesor_avanza INTEGER DEFAULT 1")
+
 init_db()
 
-def get_estado_sesion(juego):
+def sincronizar_estado_juego(juego):
+    """
+    Evalúa y actualiza automáticamente las transiciones del protocolo de 6 etapas:
+    - Etapa 1 & 2 ('inscripcion') -> Etapa 3 ('jugando', Ronda 1) al llegar a cupo_estudiantes inscritos.
+    - Etapa 3 & 4 ('jugando')     -> Etapa 5 ('resultados') al llegar a cupo_estudiantes jugadas en la ronda.
+    - Etapa 5 & 6 ('resultados')  -> Etapa 3 ('jugando', Ronda r+1) cuando el profesor la activa
+                                     (o automáticamente si solo_profesor_avanza=0 y todos marcan Listo).
+    """
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT ronda_activa, estado FROM estado_sesion WHERE juego = ?",
+            "SELECT ronda_activa, fase, cupo_estudiantes, solo_profesor_avanza FROM estado_sesion WHERE juego = ?",
             (juego,)
         ).fetchone()
         if not row:
             conn.execute(
-                "INSERT INTO estado_sesion (juego, ronda_activa, estado) VALUES (?, 1, 'abierta')",
+                """INSERT INTO estado_sesion (juego, ronda_activa, estado, fase, cupo_estudiantes, solo_profesor_avanza)
+                   VALUES (?, 1, 'abierta', 'inscripcion', ?, 1)""",
+                (juego, DEFAULT_CUPO)
+            )
+            ronda_activa, fase, cupo, solo_prof = 1, "inscripcion", DEFAULT_CUPO, 1
+        else:
+            ronda_activa = int(row[0] or 1)
+            fase = str(row[1] or "inscripcion")
+            cupo = max(1, int(row[2] or DEFAULT_CUPO))
+            solo_prof = int(row[3]) if row[3] is not None else 1
+
+        num_inscritos = conn.execute(
+            "SELECT COUNT(*) FROM participantes WHERE juego = ?", (juego,)
+        ).fetchone()[0]
+
+        # Transición automática Etapa 2 -> Etapa 3: Todos los participantes esperados se inscribieron
+        if fase == "inscripcion" and num_inscritos >= cupo:
+            fase = "jugando"
+            ronda_activa = 1
+            conn.execute(
+                "UPDATE estado_sesion SET fase = 'jugando', ronda_activa = 1, estado = 'abierta' WHERE juego = ?",
                 (juego,)
             )
-            return 1, "abierta"
-        return int(row[0]), str(row[1])
 
-def set_estado_sesion(juego, ronda, estado):
+        num_respuestas = conn.execute(
+            "SELECT COUNT(*) FROM respuestas WHERE juego = ? AND ronda = ?",
+            (juego, ronda_activa)
+        ).fetchone()[0]
+
+        # Transición automática Etapa 4 -> Etapa 5: Todos los participantes jugaron la ronda activa
+        if fase == "jugando" and num_respuestas >= cupo:
+            fase = "resultados"
+            conn.execute(
+                "UPDATE estado_sesion SET fase = 'resultados', estado = 'cerrada' WHERE juego = ?",
+                (juego,)
+            )
+
+        num_listos = conn.execute(
+            "SELECT COUNT(*) FROM listos_ronda WHERE juego = ? AND ronda = ?",
+            (juego, ronda_activa)
+        ).fetchone()[0]
+
+        # Transición opcional Etapa 5 -> Etapa 6 -> Etapa 3 (si el modo automático está habilitado)
+        if fase == "resultados" and not solo_prof and num_listos >= cupo:
+            if ronda_activa < MAX_RONDAS:
+                ronda_activa += 1
+                fase = "jugando"
+                conn.execute(
+                    "UPDATE estado_sesion SET ronda_activa = ?, fase = 'jugando', estado = 'abierta' WHERE juego = ?",
+                    (ronda_activa, juego)
+                )
+                num_respuestas = conn.execute(
+                    "SELECT COUNT(*) FROM respuestas WHERE juego = ? AND ronda = ?",
+                    (juego, ronda_activa)
+                ).fetchone()[0]
+                num_listos = 0
+            else:
+                fase = "finalizado"
+                conn.execute(
+                    "UPDATE estado_sesion SET fase = 'finalizado', estado = 'cerrada' WHERE juego = ?",
+                    (juego,)
+                )
+
+    return {
+        "ronda_activa": ronda_activa,
+        "fase": fase,
+        "cupo": cupo,
+        "solo_profesor_avanza": bool(solo_prof),
+        "num_inscritos": num_inscritos,
+        "num_respuestas": num_respuestas,
+        "num_listos": num_listos,
+    }
+
+def actualizar_sesion(juego, ronda_activa=None, fase=None, cupo=None, solo_profesor_avanza=None):
     with get_conn() as conn:
-        conn.execute("""
-            INSERT INTO estado_sesion (juego, ronda_activa, estado)
-            VALUES (?, ?, ?)
-            ON CONFLICT(juego) DO UPDATE SET ronda_activa=excluded.ronda_activa, estado=excluded.estado
-        """, (juego, ronda, estado))
+        conn.execute(
+            """INSERT INTO estado_sesion (juego, ronda_activa, estado, fase, cupo_estudiantes, solo_profesor_avanza)
+               VALUES (?, 1, 'abierta', 'inscripcion', ?, 1)
+               ON CONFLICT(juego) DO NOTHING""",
+            (juego, DEFAULT_CUPO)
+        )
+        if ronda_activa is not None:
+            conn.execute("UPDATE estado_sesion SET ronda_activa = ? WHERE juego = ?", (int(ronda_activa), juego))
+        if fase is not None:
+            est_txt = "abierta" if fase == "jugando" else "cerrada"
+            conn.execute("UPDATE estado_sesion SET fase = ?, estado = ? WHERE juego = ?", (fase, est_txt, juego))
+        if cupo is not None:
+            conn.execute("UPDATE estado_sesion SET cupo_estudiantes = ? WHERE juego = ?", (max(1, int(cupo)), juego))
+        if solo_profesor_avanza is not None:
+            conn.execute("UPDATE estado_sesion SET solo_profesor_avanza = ? WHERE juego = ?", (1 if solo_profesor_avanza else 0, juego))
+
+def reiniciar_juego_db(juego, borrar_todo=False, mantener_cupo=DEFAULT_CUPO):
+    with get_conn() as conn:
+        if borrar_todo:
+            conn.execute("DELETE FROM participantes")
+            conn.execute("DELETE FROM respuestas")
+            conn.execute("DELETE FROM listos_ronda")
+            conn.execute("DELETE FROM estado_sesion")
+        else:
+            conn.execute("DELETE FROM participantes WHERE juego = ?", (juego,))
+            conn.execute("DELETE FROM respuestas WHERE juego = ?", (juego,))
+            conn.execute("DELETE FROM listos_ronda WHERE juego = ?", (juego,))
+        conn.execute(
+            """INSERT INTO estado_sesion (juego, ronda_activa, estado, fase, cupo_estudiantes, solo_profesor_avanza)
+               VALUES (?, 1, 'abierta', 'inscripcion', ?, 1)
+               ON CONFLICT(juego) DO UPDATE SET
+                   ronda_activa = 1,
+                   estado = 'abierta',
+                   fase = 'inscripcion',
+                   cupo_estudiantes = excluded.cupo_estudiantes""",
+            (juego, max(1, int(mantener_cupo)))
+        )
+
+# ==============================================================================
+# FRAGMENTOS EN TIEMPO REAL (ACTUALIZACIÓN CADA 2 SEGUNDOS) - ESTUDIANTE
+# ==============================================================================
+@st.fragment(run_every=2)
+def render_sala_espera_inscripcion(juego, estudiante):
+    s = sincronizar_estado_juego(juego)
+    if s["fase"] != "inscripcion":
+        st.rerun()
+
+    inscritos = s["num_inscritos"]
+    cupo = s["cupo"]
+    faltan = max(0, cupo - inscritos)
+    progreso = min(1.0, inscritos / cupo) if cupo > 0 else 0.0
+
+    with st.container(border=True):
+        st.markdown(f"### ⏳ Sala de Espera — ¡Bienvenido/a, {estudiante}!")
+        st.write(
+            "Tu inscripción ha sido registrada con éxito. En cuanto se inscriban todos los participantes "
+            "(o el profesor dé inicio a la sesión), se habilitará automáticamente la **Ronda 1** en tu pantalla."
+        )
+        st.progress(progreso)
+        c1, c2, c3 = st.columns(3)
+        c1.metric("👥 Estudiantes inscritos", f"{inscritos} / {cupo}")
+        c2.metric("⏳ Faltan por inscribirse", faltan)
+        c3.metric("📡 Estado", "Esperando inicio")
+        st.caption("🟢 Conectado en tiempo real — Esta pantalla se actualiza automáticamente cada 2 segundos.")
 
 @st.fragment(run_every=2)
-def render_resumen_en_vivo_estudiante(juego, r_res, mi_decision, estudiante, dict_jugadas, rondas_jugadas):
-    st.markdown(f"### 📊 Resultados de tu Ronda {r_res} de {MAX_RONDAS}")
-    st.progress(r_res / MAX_RONDAS)
-    
-    with get_conn() as conn:
-        df_ronda_clase = pd.read_sql_query(
-            "SELECT decision FROM respuestas WHERE juego = ? AND ronda = ?",
-            conn, params=(juego, r_res)
-        )
-    
-    promedio_clase = df_ronda_clase["decision"].mean() if not df_ronda_clase.empty else mi_decision
-    meta_clase = (2 / 3) * promedio_clase
-    distancia_mi = abs(mi_decision - meta_clase)
-    total_jugadores = len(df_ronda_clase)
-    
+def render_monitor_fase_durante_seleccion(juego, ronda_esperada):
+    """Vigila cambios de fase/ronda cada 2s sin recargar ni interrumpir el formulario numérico del alumno."""
+    s = sincronizar_estado_juego(juego)
+    if s["fase"] != "jugando" or s["ronda_activa"] != ronda_esperada:
+        st.rerun()
+    st.caption(
+        f"👥 Avance de la clase en Ronda {ronda_esperada}: **{s['num_respuestas']} de {s['cupo']}** jugadas enviadas "
+        f"🟢 *(en vivo)*"
+    )
+
+@st.fragment(run_every=2)
+def render_sala_espera_jugadas(juego, ronda_actual, mi_decision):
+    s = sincronizar_estado_juego(juego)
+    if s["fase"] != "jugando" or s["ronda_activa"] != ronda_actual:
+        st.rerun()
+
+    jugadas = s["num_respuestas"]
+    cupo = s["cupo"]
+    faltan = max(0, cupo - jugadas)
+    progreso = min(1.0, jugadas / cupo) if cupo > 0 else 0.0
+
     with st.container(border=True):
-        st.markdown("#### 🎯 Resultados de la Ronda (actualizándose en vivo):")
+        st.markdown(f"### ⏳ Ronda {ronda_actual} — Esperando a que todos los participantes jueguen")
+        st.write(
+            "Tu elección ya está guardada de forma confidencial. Los resultados y la meta ganadora (2/3 del promedio) "
+            "se revelarán automáticamente apenas todos hayan enviado su número."
+        )
+        st.progress(progreso)
         c1, c2, c3 = st.columns(3)
-        c1.metric("Tu número", f"{mi_decision:.1f}")
-        c2.metric("Promedio clase", f"{promedio_clase:.2f}")
-        c3.metric("Meta (2/3)", f"{meta_clase:.2f}")
-        
+        c1.metric("✅ Tu número enviado", f"{mi_decision:.1f}")
+        c2.metric("🗳️ Jugadas recibidas", f"{jugadas} / {cupo}")
+        c3.metric("⏳ Pendientes por jugar", faltan)
+        st.caption("🟢 Actualizando en vivo cada 2 segundos...")
+
+@st.fragment(run_every=2)
+def render_resultados_ronda_estudiante(juego, ronda_res, cedula, estudiante):
+    s = sincronizar_estado_juego(juego)
+    if s["fase"] != "resultados" or s["ronda_activa"] != ronda_res:
+        st.rerun()
+
+    with get_conn() as conn:
+        df_ronda = pd.read_sql_query(
+            "SELECT estudiante, cedula, universidad, decision FROM respuestas WHERE juego = ? AND ronda = ?",
+            conn, params=(juego, ronda_res)
+        )
+        ya_listo = conn.execute(
+            "SELECT 1 FROM listos_ronda WHERE juego = ? AND ronda = ? AND cedula = ?",
+            (juego, ronda_res, cedula)
+        ).fetchone() is not None
+
+    fila_mia = df_ronda[df_ronda["cedula"] == cedula]
+    participo = not fila_mia.empty
+    mi_decision = float(fila_mia["decision"].iloc[0]) if participo else None
+
+    promedio_clase = float(df_ronda["decision"].mean()) if not df_ronda.empty else 0.0
+    meta_clase = (2.0 / 3.0) * promedio_clase
+    total_jugadores = len(df_ronda)
+
+    ganadores_txt = "—"
+    es_ganador = False
+    if not df_ronda.empty:
+        df_ronda["distancia"] = (df_ronda["decision"] - meta_clase).abs()
+        min_dist = df_ronda["distancia"].min()
+        ganadores_df = df_ronda[df_ronda["distancia"] == min_dist]
+        ganadores_txt = ", ".join([f"{r['estudiante']} ({r['decision']:.1f})" for _, r in ganadores_df.iterrows()])
+        if participo and abs(mi_decision - meta_clase) == min_dist:
+            es_ganador = True
+
+    with st.container(border=True):
+        st.markdown(f"### 📊 Resultados Oficiales — Ronda {ronda_res} de {MAX_RONDAS}")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Tu número", f"{mi_decision:.1f}" if participo else "Sin jugada")
+        c2.metric("Promedio de la clase", f"{promedio_clase:.2f}")
+        c3.metric("🎯 Meta (2/3)", f"{meta_clase:.2f}")
+
         st.divider()
-        st.write(f"📏 **Tu distancia a la meta ganadora:** **{distancia_mi:.2f}** unidades")
-        st.caption(f"👥 Respuestas registradas en la clase: **{total_jugadores}** 🟢 *(actualizando en vivo cada 2 segundos)*")
-        
-        if distancia_mi <= 3.0:
-            st.success("🌟 ¡Excelente intuición! Tu número estuvo sumamente cerca de la meta ganadora.")
-        elif mi_decision > meta_clase:
-            st.info(f"💡 **Retroalimentación:** Tu número ({mi_decision:.1f}) estuvo **por encima** de la meta ({meta_clase:.2f}). Recuerda que la meta es 2/3 del promedio. ¡Para la siguiente ronda la clase tenderá a jugar números más bajos!")
+        st.markdown(f"🏆 **Ganador(es) de la Ronda {ronda_res}:** {ganadores_txt}")
+        st.caption(f"👥 Total de jugadas computadas en esta ronda: **{total_jugadores}**")
+
+        if participo:
+            distancia_mi = abs(mi_decision - meta_clase)
+            st.write(f"📏 **Tu distancia a la meta ganadora:** **{distancia_mi:.2f}** unidades")
+            if es_ganador:
+                st.success("🏆 **¡Felicitaciones! Obtuviste la jugada más cercana a la meta en esta ronda.**")
+            elif distancia_mi <= 3.0:
+                st.success("🌟 ¡Excelente intuición! Tu número estuvo sumamente cerca de la meta ganadora.")
+            elif mi_decision > meta_clase:
+                st.info(
+                    f"💡 **Retroalimentación:** Tu número ({mi_decision:.1f}) estuvo **por encima** de la meta ({meta_clase:.2f}). "
+                    "Recuerda que la meta es 2/3 del promedio; en la siguiente ronda el grupo suele ajustar sus números hacia abajo."
+                )
+            else:
+                st.info(
+                    f"💡 **Retroalimentación:** Tu número ({mi_decision:.1f}) estuvo **por debajo** de la meta ({meta_clase:.2f}). "
+                    "Observa el comportamiento del grupo para calibrar tu siguiente jugada."
+                )
         else:
-            st.info(f"💡 **Retroalimentación:** Tu número ({mi_decision:.1f}) estuvo **por debajo** de la meta ({meta_clase:.2f}). ¡Interesante estrategia! Observa la meta calculada para calibrar tu siguiente jugada.")
-    
-    if r_res < MAX_RONDAS:
+            st.warning("Te incorporaste después del cierre de esta ronda. Podrás participar en la siguiente.")
+
+    # --- ETAPA 6: ACTIVACIÓN DE LA SIGUIENTE RONDA ---
+    if ronda_res < MAX_RONDAS:
         st.divider()
-        st.markdown(f"##### ¿Listo para la Ronda {r_res + 1}?")
-        st.caption(f"Toma en cuenta la meta actual (**{meta_clase:.2f}**) para estimar tu siguiente número estratégico.")
-        if st.button(f"➡️ Continuar a la Ronda {r_res + 1}", type="primary", use_container_width=True):
-            st.session_state[f"continuar_despues_de_{r_res}"] = True
-            st.rerun()
+        with st.container(border=True):
+            st.markdown(f"#### ⏭️ Etapa 6: Paso a la Ronda {ronda_res + 1}")
+            if s["solo_profesor_avanza"]:
+                if not ya_listo:
+                    if st.button(f"✋ Marcar que estoy listo para la Ronda {ronda_res + 1}", type="primary", use_container_width=True):
+                        with get_conn() as conn:
+                            conn.execute(
+                                "INSERT OR IGNORE INTO listos_ronda (juego, ronda, cedula) VALUES (?, ?, ?)",
+                                (juego, ronda_res, cedula)
+                            )
+                        st.rerun()
+                else:
+                    st.success(f"✅ Estás listo/a ({s['num_listos']}/{s['cupo']} estudiantes listos).")
+                st.caption(
+                    f"🟢 **Atento/a:** Tu pantalla abrirá automáticamente la **Ronda {ronda_res + 1}** "
+                    "en el instante en que el profesor la active."
+                )
+            else:
+                if not ya_listo:
+                    if st.button(
+                        f"➡️ Confirmar y pasar a la Ronda {ronda_res + 1} ({s['num_listos']}/{s['cupo']} listos)",
+                        type="primary",
+                        use_container_width=True
+                    ):
+                        with get_conn() as conn:
+                            conn.execute(
+                                "INSERT OR IGNORE INTO listos_ronda (juego, ronda, cedula) VALUES (?, ?, ?)",
+                                (juego, ronda_res, cedula)
+                            )
+                        sincronizar_estado_juego(juego)
+                        st.rerun()
+                else:
+                    st.info(
+                        f"⏳ Esperando al resto de compañeros para activar la Ronda {ronda_res + 1}: "
+                        f"**{s['num_listos']} de {s['cupo']}** listos 🟢 *(actualizando cada 2s)*"
+                    )
     else:
         st.divider()
-        if not st.session_state.get(f"globos_mostrados_{r_res}", False):
-            st.balloons()
-            st.session_state[f"globos_mostrados_{r_res}"] = True
-        st.success(f"🎉 **¡Felicitaciones, {estudiante}! Has completado las {MAX_RONDAS} rondas del juego.**")
-        
-        df_resumen = pd.DataFrame([
-            {"Ronda": r, "Tu Decisión": dict_jugadas[r]} for r in rondas_jugadas
-        ])
-        st.subheader("📋 Resumen histórico de tus decisiones:")
-        st.dataframe(df_resumen, use_container_width=True, hide_index=True)
-        st.info("👀 Observa el proyector para ver el análisis de la clase y la convergencia hacia el Equilibrio de Nash.")
+        mostrar_resumen_final_estudiante(juego, cedula, estudiante)
 
-# --- BARRA LATERAL: CONFIGURACIÓN ---
+def mostrar_resumen_final_estudiante(juego, cedula, estudiante):
+    if not st.session_state.get("globos_final_mostrados", False):
+        st.balloons()
+        st.session_state["globos_final_mostrados"] = True
+
+    st.success(f"🎉 **¡Felicitaciones, {estudiante}! Se han completado las {MAX_RONDAS} rondas del experimento.**")
+    with get_conn() as conn:
+        df_todas = pd.read_sql_query(
+            "SELECT ronda, cedula, decision FROM respuestas WHERE juego = ? ORDER BY ronda ASC",
+            conn, params=(juego,)
+        )
+    if not df_todas.empty:
+        filas = []
+        for r in range(1, MAX_RONDAS + 1):
+            df_r = df_todas[df_todas["ronda"] == r]
+            if df_r.empty:
+                continue
+            prom = df_r["decision"].mean()
+            meta = (2.0 / 3.0) * prom
+            mia = df_r[df_r["cedula"] == cedula]
+            mi_val = float(mia["decision"].iloc[0]) if not mia.empty else None
+            filas.append({
+                "Ronda": f"Ronda {r}",
+                "Tu Número": f"{mi_val:.1f}" if mi_val is not None else "—",
+                "Promedio Clase": f"{prom:.2f}",
+                "Meta (2/3)": f"{meta:.2f}",
+                "Tu Distancia": f"{abs(mi_val - meta):.2f}" if mi_val is not None else "—"
+            })
+        if filas:
+            st.subheader("📋 Historial completo de tus 5 rondas:")
+            st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True)
+    st.info("👀 Observa el proyector para el análisis final de convergencia hacia el Equilibrio de Nash.")
+
+# ==============================================================================
+# BARRA LATERAL: CONFIGURACIÓN Y NAVEGACIÓN
+# ==============================================================================
 col_sb1, col_sb2 = st.sidebar.columns([1, 1])
 with col_sb1:
     st.image("https://upload.wikimedia.org/wikipedia/commons/8/8c/Escudo_de_la_Escuela_Polit%C3%A9cnica_Nacional.png", width=75)
 with col_sb2:
     if os.path.exists("logo_dec.png"):
         st.image("logo_dec.png", width=78)
+
 st.sidebar.title("Laboratorio Keynes")
 rol = st.sidebar.radio("Modo de vista:", ["👨‍🎓 Estudiante", "👨‍🏫 Profesor (Proyector)"])
 
-# Juego fijado: Concurso de Belleza de Keynes
 juego = "p-Beauty Contest (2/3 del promedio)"
 st.sidebar.info("🎯 **Juego:** Concurso de Belleza de Keynes (2/3 del promedio)")
 
@@ -475,41 +826,39 @@ st.sidebar.caption(f"[{st.session_state['app_url']}]({st.session_state['app_url'
 if rol == "👨‍🎓 Estudiante":
     render_encabezado_institucional(
         "🎯 Concurso de Belleza de Keynes",
-        f"Experimento interactivo de Teoría de Juegos (2/3 del promedio) — Máximo {MAX_RONDAS} rondas"
+        f"Experimento interactivo de Teoría de Juegos (2/3 del promedio) — {MAX_RONDAS} rondas sincronizadas"
     )
-    
-    # --- PESTAÑAS: JUEGO / GUÍA Y EXPLICACIÓN ---
+
     tab_jugar, tab_guia = st.tabs([
-        "📝 Realizar mi Jugada",
+        "📝 Sala de Juego",
         "📖 Explicación y Reglas del Juego"
     ])
-    
-    # ------------------ PESTAÑA 2: GUÍA Y EXPLICACIÓN ------------------
+
     with tab_guia:
         st.header("🎯 Concurso de Belleza de Keynes (p-Beauty Contest)")
         st.markdown("""
         ### 📌 ¿En qué consiste el juego?
-        Cada participante debe elegir un número real entre **0 y 100**. 
-        Una vez que todos envían su número, el sistema calcula el **promedio de toda la clase** y luego calcula la **meta**:
-        
+        Cada participante debe elegir un número real entre **0 y 100**.
+        Una vez que todos los participantes envían su número, el sistema calcula el **promedio de toda la clase** y determina la **meta**:
+
         $$\\text{Meta} = \\frac{2}{3} \\times \\text{Promedio General}$$
-        
+
         🏆 **¿Quién gana?** El jugador cuyo número esté más cerca de la **meta** (menor distancia absoluta).
-        
+
+        ---
+        ### 🔄 Dinámica de la sesión (6 etapas):
+        1. **Inscripción:** Registra tus datos y universidad.
+        2. **Sala de espera:** Aguarda mientras se completa el cupo de participantes.
+        3. **Elección de número:** Escoge estratégicamente tu valor entre `0.0` y `100.0`.
+        4. **Espera de jugadas:** Aguarda hasta que todos los participantes hayan enviado su decisión.
+        5. **Resultados de la ronda:** Analiza el promedio, la meta ganadora ($2/3$) y tu desempeño.
+        6. **Siguiente ronda:** Se activa la nueva ronda hasta completar las 5 rondas.
+
         ---
         ### 📜 Origen histórico: John Maynard Keynes (1936)
-        En su famosa obra *Teoría General del Empleo, el Interés y el Dinero*, Keynes comparó los mercados financieros con un concurso de belleza de los periódicos británicos de su época, donde el premio no era para quien eligiera a la cara más bella según su gusto, sino para **quien adivinara la preferencia media de todos los lectores**.
-        
-        > *"No se trata de elegir según el gusto personal, ni siquiera según la auténtica belleza, sino de anticipar lo que la opinión promedio cree que será la opinión promedio."*
-        
-        ---
-        ### 🎯 Desafío para el jugador:
-        * No se trata de elegir tu número favorito ni de buscar una respuesta matemática aislada.
-        * Tu reto es **anticipar la mentalidad y comportamiento de tus compañeros**: adivinar qué número jugarán en promedio y posicionarte estratégicamente a **2/3 de ese promedio**.
-        * ¿Qué número crees que elegirá la mayoría en esta ronda?
+        En su obra *Teoría General del Empleo, el Interés y el Dinero*, Keynes comparó los mercados financieros con un concurso de belleza de los periódicos británicos, donde el premio no era para quien eligiera el rostro más bello según su gusto personal, sino para **quien anticipara mejor la preferencia promedio de todos los demás participantes**.
         """)
-    
-    # ------------------ PESTAÑA 1: FORMULARIO DE JUGADA ------------------
+
     with tab_jugar:
         if "est_registrado" not in st.session_state:
             st.session_state["est_registrado"] = False
@@ -517,10 +866,28 @@ if rol == "👨‍🎓 Estudiante":
             st.session_state["est_cedula"] = ""
             st.session_state["est_universidad"] = "Escuela Politécnica Nacional"
 
+        estado_actual = sincronizar_estado_juego(juego)
+
+        # Si el profesor reinició la partida, limpiar sesión local automáticamente
+        if st.session_state["est_registrado"]:
+            with get_conn() as conn:
+                sigue_inscrito = conn.execute(
+                    "SELECT estudiante, universidad FROM participantes WHERE juego = ? AND cedula = ?",
+                    (juego, st.session_state["est_cedula"])
+                ).fetchone()
+            if not sigue_inscrito:
+                st.session_state["est_registrado"] = False
+                st.session_state["globos_final_mostrados"] = False
+
+        # ------------------ ETAPA 1: INSCRIPCIÓN ------------------
         if not st.session_state["est_registrado"]:
-            st.subheader("📋 Registro de Participante")
-            st.write("Completa tus datos para habilitar tus decisiones en el laboratorio:")
-            
+            render_stepper(1)
+            st.subheader("1️⃣ Inscripción de Participante")
+            st.write(
+                f"Registra tus datos para ingresar a la sala del experimento "
+                f"(Inscritos actuales: **{estado_actual['num_inscritos']} / {estado_actual['cupo']}**)."
+            )
+
             with st.form("form_registro_estudiante"):
                 nombre_in = st.text_input("1. Nombre y Apellido:", placeholder="Ej: Juan Pérez").strip()
                 cedula_in = st.text_input("2. Cédula (10 dígitos):", max_chars=10, placeholder="Ej: 1712345678").strip()
@@ -533,19 +900,30 @@ if rol == "👨‍🎓 Estudiante":
                         "Universidad Central del Ecuador"
                     ]
                 )
-                btn_registro = st.form_submit_button("✅ Guardar y Comenzar a Jugar", type="primary", use_container_width=True)
-                
+                btn_registro = st.form_submit_button("✅ Inscribirme y Pasar a Sala de Espera", type="primary", use_container_width=True)
+
                 if btn_registro:
                     if not nombre_in:
                         st.error("⚠️ Por favor ingresa tu Nombre y Apellido.")
                     elif not (len(cedula_in) == 10 and cedula_in.isdigit()):
                         st.error("⚠️ La cédula debe contener exactamente 10 dígitos numéricos.")
                     else:
+                        with get_conn() as conn:
+                            conn.execute(
+                                """INSERT INTO participantes (juego, cedula, estudiante, universidad)
+                                   VALUES (?, ?, ?, ?)
+                                   ON CONFLICT(juego, cedula) DO UPDATE SET
+                                       estudiante = excluded.estudiante,
+                                       universidad = excluded.universidad""",
+                                (juego, cedula_in, nombre_in, universidad_in)
+                            )
                         st.session_state["est_nombre"] = nombre_in
                         st.session_state["est_cedula"] = cedula_in
                         st.session_state["est_universidad"] = universidad_in
                         st.session_state["est_registrado"] = True
+                        sincronizar_estado_juego(juego)
                         st.rerun()
+
         else:
             estudiante = st.session_state["est_nombre"]
             cedula = st.session_state["est_cedula"]
@@ -555,210 +933,436 @@ if rol == "👨‍🎓 Estudiante":
             with col_info:
                 st.info(f"👤 **{estudiante}** | 🪪 Cédula: **{cedula}** | 🏛️ **{universidad}**")
             with col_btn:
-                if st.button("🔄 Cambiar datos / Jugador"):
+                if st.button("🔄 Cambiar usuario", use_container_width=True):
                     st.session_state["est_registrado"] = False
-                    st.session_state["est_nombre"] = ""
-                    st.session_state["est_cedula"] = ""
                     st.rerun()
 
-            with get_conn() as conn:
-                res = conn.execute(
-                    "SELECT ronda, decision FROM respuestas WHERE juego = ? AND cedula = ? ORDER BY ronda ASC",
-                    (juego, cedula)
-                ).fetchall()
-            
-            dict_jugadas = {r[0]: r[1] for r in res}
-            rondas_jugadas = sorted(list(dict_jugadas.keys()))
-            ultima_ronda = max(rondas_jugadas) if rondas_jugadas else 0
+            estado_actual = sincronizar_estado_juego(juego)
+            fase = estado_actual["fase"]
+            ronda_activa = estado_actual["ronda_activa"]
 
-            # Alternativa B: Al enviar una ronda, mostrar pantalla de resumen antes de permitir pasar a la siguiente
-            debe_ver_resumen = (ultima_ronda > 0) and not st.session_state.get(f"continuar_despues_de_{ultima_ronda}", False)
+            # ------------------ ETAPA 2: SALA DE ESPERA DE INSCRIPCIÓN ------------------
+            if fase == "inscripcion":
+                render_stepper(2)
+                render_sala_espera_inscripcion(juego, estudiante)
 
-            # Caso 1: Mostrar resumen de la ronda recién enviada antes de avanzar (se actualiza en vivo cada 2s)
-            if debe_ver_resumen:
-                r_res = ultima_ronda
-                mi_decision = dict_jugadas[r_res]
-                render_resumen_en_vivo_estudiante(juego, r_res, mi_decision, estudiante, dict_jugadas, rondas_jugadas)
+            # ------------------ ETAPAS 3 Y 4: RONDA ABIERTA ------------------
+            elif fase == "jugando":
+                with get_conn() as conn:
+                    jugada_actual = conn.execute(
+                        "SELECT decision FROM respuestas WHERE juego = ? AND ronda = ? AND cedula = ?",
+                        (juego, ronda_activa, cedula)
+                    ).fetchone()
 
-            # Caso 2: Ya completó las 5 rondas y ya revisó el resumen
-            elif len(rondas_jugadas) >= MAX_RONDAS:
-                st.success(f"🎉 **¡Excelente, {estudiante}! Has completado las {MAX_RONDAS} rondas del juego.**")
-                st.progress(1.0)
-                
-                df_resumen = pd.DataFrame([
-                    {"Ronda": r, "Tu Decisión": dict_jugadas[r]} for r in rondas_jugadas
-                ])
-                st.subheader("📋 Resumen de tus decisiones en las 5 rondas:")
-                st.dataframe(df_resumen, use_container_width=True, hide_index=True)
-                st.info("Observa el proyector para ver el análisis general de la clase.")
+                # ETAPA 4: Ya eligió su número -> Espera hasta que todos jueguen
+                if jugada_actual is not None:
+                    render_stepper(4)
+                    render_sala_espera_jugadas(juego, ronda_activa, float(jugada_actual[0]))
 
-            # Caso 3: Formulario para responder la ronda correspondiente
-            else:
-                ronda_a_jugar = len(rondas_jugadas) + 1
-                
-                st.markdown(f"### 📍 Ronda **{ronda_a_jugar}** de **{MAX_RONDAS}**")
-                st.progress((ronda_a_jugar - 1) / MAX_RONDAS)
-                
-                if ronda_a_jugar > 1:
-                    r_ant = ronda_a_jugar - 1
-                    with get_conn() as conn:
-                        df_prev = pd.read_sql_query(
-                            "SELECT decision FROM respuestas WHERE juego = ? AND ronda = ?",
-                            conn, params=(juego, r_ant)
+                # ETAPA 3: Escoger su número para la ronda activa
+                else:
+                    render_stepper(3)
+                    st.markdown(f"### 3️⃣ Ronda **{ronda_activa}** de **{MAX_RONDAS}** — Escoge tu número")
+                    render_monitor_fase_durante_seleccion(juego, ronda_activa)
+
+                    if ronda_activa > 1:
+                        r_ant = ronda_activa - 1
+                        with get_conn() as conn:
+                            df_prev = pd.read_sql_query(
+                                "SELECT cedula, decision FROM respuestas WHERE juego = ? AND ronda = ?",
+                                conn, params=(juego, r_ant)
+                            )
+                        if not df_prev.empty:
+                            prom_prev = df_prev["decision"].mean()
+                            meta_prev = (2.0 / 3.0) * prom_prev
+                            mia_prev = df_prev[df_prev["cedula"] == cedula]
+                            txt_mia = f" | Tu jugada: **{mia_prev['decision'].iloc[0]:.1f}**" if not mia_prev.empty else ""
+                            st.caption(
+                                f"💡 Referencia Ronda {r_ant}: Promedio = **{prom_prev:.2f}** | "
+                                f"Meta (2/3) = **{meta_prev:.2f}**{txt_mia}"
+                            )
+
+                    key_def = f"def_val_{ronda_activa}"
+                    if key_def not in st.session_state:
+                        st.session_state[key_def] = round(random.uniform(10.0, 90.0), 1)
+
+                    with st.form(f"form_jugada_{ronda_activa}"):
+                        st.markdown("#### Selecciona tu número estratégico (0.0 – 100.0)")
+                        st.write("Ganará quien quede más cerca de **2/3 del promedio** de todos los participantes en esta ronda.")
+                        decision = st.number_input(
+                            f"Tu número para la Ronda {ronda_activa}:",
+                            min_value=0.0,
+                            max_value=100.0,
+                            value=float(st.session_state[key_def]),
+                            step=0.1,
+                            help="Ingresa un número entre 0 y 100."
                         )
-                    if not df_prev.empty:
-                        meta_prev = (2 / 3) * df_prev["decision"].mean()
-                        st.caption(f"💡 Recordatorio: En la Ronda {r_ant}, la meta fue **{meta_prev:.2f}** (tu jugada fue **{dict_jugadas.get(r_ant, 0):.1f}**).")
+                        st.divider()
+                        texto_boton = (
+                            f"🚀 Enviar mi número de Ronda {ronda_activa}"
+                            if ronda_activa < MAX_RONDAS
+                            else "🏁 Enviar mi número de Ronda 5 (Final)"
+                        )
+                        enviado = st.form_submit_button(texto_boton, type="primary", use_container_width=True)
 
-                key_def = f"def_val_{ronda_a_jugar}"
-                if key_def not in st.session_state:
-                    st.session_state[key_def] = round(random.uniform(10.0, 90.0), 1)
-                
-                with st.form(f"form_jugada_{ronda_a_jugar}"):
-                    st.markdown("#### Selecciona tu número estratégico (0.0 - 100.0)")
-                    st.write("Debes escoger un valor entre **0 y 100**. Ganará quien esté más cerca de **2/3 del promedio** de toda la clase.")
-                    decision = st.number_input(
-                        f"Tu número para la Ronda {ronda_a_jugar}:",
-                        min_value=0.0,
-                        max_value=100.0,
-                        value=float(st.session_state[key_def]),
-                        step=0.1,
-                        help="Ingresa el valor que crees que igualará 2/3 del promedio de todos."
-                    )
-                    
-                    st.divider()
-                    texto_boton = f"🚀 Confirmar y Enviar Ronda {ronda_a_jugar}" if ronda_a_jugar < MAX_RONDAS else "🏁 Confirmar y Finalizar Ronda 5"
-                    enviado = st.form_submit_button(texto_boton, type="primary", use_container_width=True)
-                    
-                    if enviado:
-                        try:
+                        if enviado:
+                            verif = sincronizar_estado_juego(juego)
+                            if verif["fase"] != "jugando" or verif["ronda_activa"] != ronda_activa:
+                                st.rerun()
                             with get_conn() as conn:
                                 conn.execute(
-                                    "INSERT INTO respuestas (juego, ronda, estudiante, cedula, universidad, decision) VALUES (?, ?, ?, ?, ?, ?)",
-                                    (juego, ronda_a_jugar, estudiante, cedula, universidad, float(decision))
+                                    """INSERT INTO respuestas (juego, ronda, estudiante, cedula, universidad, decision)
+                                       VALUES (?, ?, ?, ?, ?, ?)
+                                       ON CONFLICT(juego, ronda, cedula) DO NOTHING""",
+                                    (juego, ronda_activa, estudiante, cedula, universidad, float(decision))
                                 )
-                            st.session_state[f"continuar_despues_de_{ronda_a_jugar}"] = False
+                            sincronizar_estado_juego(juego)
                             st.rerun()
-                        except sqlite3.IntegrityError:
-                            st.warning(f"Ya se había registrado una respuesta para la Ronda {ronda_a_jugar} con tu cédula.")
+
+            # ------------------ ETAPAS 5 Y 6: RESULTADOS Y PASO A SIGUIENTE RONDA ------------------
+            elif fase == "resultados":
+                render_stepper(5)
+                render_resultados_ronda_estudiante(juego, ronda_activa, cedula, estudiante)
+
+            # ------------------ JUEGO COMPLETADO ------------------
+            else:
+                render_stepper(6)
+                mostrar_resumen_final_estudiante(juego, cedula, estudiante)
 
 # ==============================================================================
-# VISTA DEL PROFESOR (PROYECTOR)
+# VISTA DEL PROFESOR (PROYECTOR Y CONTROL DE SESIÓN)
 # ==============================================================================
 else:
-    ronda_activa_global, estado_sesion_global = get_estado_sesion(juego)
-    if "ronda_proyectada" not in st.session_state:
-        st.session_state["ronda_proyectada"] = min(ronda_activa_global, MAX_RONDAS)
-    
-    ronda = st.session_state["ronda_proyectada"]
-    
+    estado_global = sincronizar_estado_juego(juego)
+
     render_encabezado_institucional(
         "📊 Panel de Control del Profesor",
-        f"Visualización central para proyector — Mostrando Ronda {ronda} de {MAX_RONDAS}"
+        f"Gestión en vivo del experimento — Cupo configurado: {estado_global['cupo']} estudiantes"
     )
-    
-    # Obtener contraseña desde secrets si existe, o usar predeterminada
+
     docente_password = st.secrets.get("DOCENTE_PASSWORD", "epn2026")
     clave = st.sidebar.text_input("Contraseña docente:", type="password")
-    
+
     if clave == docente_password:
-        ronda_activa, estado_sesion = get_estado_sesion(juego)
-
-        with get_conn() as conn:
-            df = pd.read_sql_query(
-                "SELECT estudiante, cedula, universidad, decision FROM respuestas WHERE juego = ? AND ronda = ?",
-                conn, params=(juego, ronda)
-            )
-            df_hist = pd.read_sql_query(
-                "SELECT ronda, AVG(decision) as promedio, COUNT(DISTINCT coalesce(cedula, estudiante)) as participantes FROM respuestas WHERE juego = ? GROUP BY ronda ORDER BY ronda",
-                conn, params=(juego,)
-            )
-
-        # CONTROL CENTRALIZADO DE RONDAS (SINCRONIZACIÓN DE CLASE)
-        st.subheader("🎛️ Control Central de Rondas (Sincronizado con la clase)")
+        # --- BARRA DE CONFIGURACIÓN DEL PROFESOR (FUERA DEL FRAGMENTO DE 2s PARA EDICIÓN FLUIDA) ---
         with st.container(border=True):
-            col_c1, col_c2, col_c3 = st.columns([1, 1, 2])
-            col_c1.metric("📍 Ronda activa en clase", f"Ronda {ronda_activa} de {MAX_RONDAS}")
-            estado_texto = "🟢 ABIERTA (Recibiendo jugadas)" if estado_sesion == "abierta" else "🔴 CERRADA (En discusión)"
-            col_c2.metric("📡 Estado para alumnos", estado_texto)
-            
-            with col_c3:
-                st.write("**Acciones para sincronizar la clase:**")
-                b_col1, b_col2 = st.columns(2)
-                with b_col1:
-                    if estado_sesion == "abierta":
-                        if st.button(f"🔒 Cerrar Ronda {ronda_activa} y Revelar", type="primary", use_container_width=True):
-                            set_estado_sesion(juego, ronda_activa, "cerrada")
-                            st.session_state["revelar_resultados"] = True
-                            st.rerun()
-                    else:
-                        if st.button(f"🔓 Reabrir Ronda {ronda_activa}", use_container_width=True):
-                            set_estado_sesion(juego, ronda_activa, "abierta")
-                            st.rerun()
-                with b_col2:
-                    if ronda_activa < MAX_RONDAS:
-                        if st.button(f"➡️ Abrir Ronda {ronda_activa + 1}", type="secondary", use_container_width=True):
-                            set_estado_sesion(juego, ronda_activa + 1, "abierta")
-                            st.session_state["ronda_proyectada"] = ronda_activa + 1
-                            st.session_state["revelar_resultados"] = False
-                            st.rerun()
-                    else:
-                        st.info("🏁 5 rondas completadas")
-        
-        # Métricas de participación y controles rápidos
-        c_status1, c_status2, c_status3, c_status4 = st.columns([1, 1, 1, 1])
-        c_status1.metric("👥 Respuestas en ronda proyectada", len(df))
-        c_status2.metric("🔄 Ronda proyectada", f"Ronda {ronda} de {MAX_RONDAS}")
-        with c_status3:
-            st.write("")
-            if st.button("🔄 Actualizar", use_container_width=True, help="Refrescar respuestas recibidas"):
-                st.rerun()
-        with c_status4:
-            st.write("")
-            with st.popover("🗑️ Reiniciar Juego", use_container_width=True):
-                st.markdown("##### Opciones de reinicio")
-                st.write(f"Permite a los estudiantes comenzar nuevamente desde la **Ronda 1**.")
-                if st.button("🧹 Reiniciar juego activo", use_container_width=True, key="main_reset_juego"):
-                    with get_conn() as conn:
-                        conn.execute("DELETE FROM respuestas WHERE juego = ?", (juego,))
-                    set_estado_sesion(juego, 1, "abierta")
-                    st.session_state["revelar_resultados"] = False
-                    st.success(f"Respuestas de '{juego}' eliminadas. Ronda 1 abierta.")
-                    st.rerun()
-                st.divider()
-                if st.button("⚠️ Borrar toda la base", use_container_width=True, key="main_reset_todo"):
-                    with get_conn() as conn:
-                        conn.execute("DELETE FROM respuestas")
-                        conn.execute("DELETE FROM estado_sesion")
-                    set_estado_sesion(juego, 1, "abierta")
-                    st.session_state["revelar_resultados"] = False
-                    st.success("Toda la base de datos ha sido borrada.")
+            st.markdown("#### ⚙️ Configuración de la Sesión")
+            cfg_c1, cfg_c2, cfg_c3 = st.columns([1.3, 1.5, 1])
+
+            with cfg_c1:
+                nuevo_cupo = st.number_input(
+                    "👥 Número total de estudiantes participantes:",
+                    min_value=1,
+                    max_value=500,
+                    value=int(estado_global["cupo"]),
+                    step=1,
+                    help="Por defecto 20 estudiantes. Define cuántos alumnos deben inscribirse y jugar cada ronda para avanzar automáticamente."
+                )
+                if int(nuevo_cupo) != int(estado_global["cupo"]):
+                    actualizar_sesion(juego, cupo=int(nuevo_cupo))
+                    sincronizar_estado_juego(juego)
                     st.rerun()
 
-        # Recuadros interactivos como botones para elegir la ronda a proyectar
-        st.markdown("##### 📌 Selecciona la ronda que deseas proyectar en pantalla:")
-        r_cols = st.columns(MAX_RONDAS)
-        for r_num in range(1, MAX_RONDAS + 1):
-            count_r = df_hist[df_hist["ronda"] == r_num]["participantes"].values
-            val = int(count_r[0]) if len(count_r) > 0 else 0
-            es_sel = (r_num == ronda)
-            texto_alumnos = f"{val} alumno" if val == 1 else f"{val} alumnos"
-            
-            with r_cols[r_num - 1]:
-                with st.container(border=True):
-                    st.metric(f"Ronda {r_num}", texto_alumnos)
-                    texto_btn = "👁️ Proyectando" if es_sel else f"Ver Ronda {r_num}"
-                    if st.button(
-                        texto_btn,
-                        key=f"btn_ronda_sel_{r_num}",
-                        use_container_width=True,
-                        type="primary" if es_sel else "secondary"
-                    ):
-                        st.session_state["ronda_proyectada"] = r_num
-                        st.session_state["revelar_resultados"] = True
+            with cfg_c2:
+                solo_prof_nuevo = st.toggle(
+                    "🎛️ Activar siguiente ronda manualmente (Profesor)",
+                    value=estado_global["solo_profesor_avanza"],
+                    help="Activado (recomendado para clase con proyector): tras mostrar resultados en el Paso 5, el profesor decide cuándo activar la siguiente ronda. Desactivado: pasa automáticamente cuando todos pulsan 'Listo'."
+                )
+                if bool(solo_prof_nuevo) != bool(estado_global["solo_profesor_avanza"]):
+                    actualizar_sesion(juego, solo_profesor_avanza=solo_prof_nuevo)
+                    sincronizar_estado_juego(juego)
+                    st.rerun()
+
+            with cfg_c3:
+                st.write("")
+                with st.popover("🗑️ Reiniciar Partida", use_container_width=True):
+                    st.markdown("##### Reiniciar experimento")
+                    st.caption("Vuelve a la Etapa 1 (Inscripción) manteniendo el cupo configurado.")
+                    if st.button("🧹 Reiniciar partida actual", type="primary", use_container_width=True, key="main_reset_juego"):
+                        reiniciar_juego_db(juego, borrar_todo=False, mantener_cupo=int(nuevo_cupo))
+                        st.session_state.pop("ronda_proyectada", None)
+                        st.session_state["seguir_ronda_activa"] = True
+                        st.rerun()
+                    st.divider()
+                    if st.button("⚠️ Restablecer todo de fábrica (Cupo = 20)", use_container_width=True, key="main_reset_todo"):
+                        reiniciar_juego_db(juego, borrar_todo=True, mantener_cupo=DEFAULT_CUPO)
+                        st.session_state.pop("ronda_proyectada", None)
+                        st.session_state["seguir_ronda_activa"] = True
                         st.rerun()
 
-        # Código QR permanentemente visible para el proyector
+        # --- PANEL EN VIVO DEL PROYECTOR (ACTUALIZACIÓN AUTOMÁTICA CADA 2 SEGUNDOS) ---
+        @st.fragment(run_every=2)
+        def render_panel_profesor_en_vivo(juego):
+            s = sincronizar_estado_juego(juego)
+            ronda_activa = s["ronda_activa"]
+            fase = s["fase"]
+            cupo = s["cupo"]
+            num_inscritos = s["num_inscritos"]
+            num_respuestas = s["num_respuestas"]
+            num_listos = s["num_listos"]
+
+            if st.session_state.get("seguir_ronda_activa", True) or "ronda_proyectada" not in st.session_state:
+                st.session_state["ronda_proyectada"] = ronda_activa
+            ronda_proy = st.session_state["ronda_proyectada"]
+
+            # Indicador visual de etapa actual
+            mapa_paso = {"inscripcion": 2 if num_inscritos > 0 else 1, "jugando": 4 if num_respuestas > 0 else 3, "resultados": 5, "finalizado": 6}
+            render_stepper(mapa_paso.get(fase, 1))
+
+            with get_conn() as conn:
+                df_inscritos = pd.read_sql_query(
+                    "SELECT estudiante, cedula, universidad FROM participantes WHERE juego = ? ORDER BY id ASC",
+                    conn, params=(juego,)
+                )
+                df_proy = pd.read_sql_query(
+                    "SELECT estudiante, cedula, universidad, decision FROM respuestas WHERE juego = ? AND ronda = ?",
+                    conn, params=(juego, ronda_proy)
+                )
+                df_activa = pd.read_sql_query(
+                    "SELECT estudiante, cedula, universidad, decision FROM respuestas WHERE juego = ? AND ronda = ?",
+                    conn, params=(juego, ronda_activa)
+                )
+                df_hist = pd.read_sql_query(
+                    "SELECT ronda, AVG(decision) as promedio, COUNT(DISTINCT coalesce(cedula, estudiante)) as participantes "
+                    "FROM respuestas WHERE juego = ? GROUP BY ronda ORDER BY ronda",
+                    conn, params=(juego,)
+                )
+
+            # --- CONTROL CENTRAL SINCRONIZADO DE LAS 6 ETAPAS ---
+            with st.container(border=True):
+                etiquetas_fase = {
+                    "inscripcion": "1º-2º INSCRIPCIÓN Y SALA DE ESPERA",
+                    "jugando": f"3º-4º RONDA {ronda_activa} EN JUEGO",
+                    "resultados": f"5º RESULTADOS RONDA {ronda_activa}",
+                    "finalizado": "🏁 JUEGO FINALIZADO (5 RONDAS)"
+                }
+                m1, m2, m3, m4 = st.columns([1.4, 1, 1, 1])
+                m1.metric("📡 Etapa actual", etiquetas_fase.get(fase, fase))
+                m2.metric("👥 Inscritos en sala", f"{num_inscritos} / {cupo}")
+                m3.metric(f"🗳️ Jugadas Ronda {ronda_activa}", f"{num_respuestas} / {cupo}")
+                m4.metric("📍 Ronda proyectada", f"Ronda {ronda_proy} de {MAX_RONDAS}")
+
+                st.divider()
+
+                # Controles contextuales según la etapa
+                if fase == "inscripcion":
+                    prog_ins = min(1.0, num_inscritos / cupo) if cupo > 0 else 0.0
+                    st.progress(prog_ins)
+                    col_a, col_b = st.columns([2, 1])
+                    with col_a:
+                        st.write(
+                            f"⏳ **Sala de espera activa:** Esperando a completar **{cupo}** estudiantes inscritos "
+                            f"(actualmente **{num_inscritos}**). Al llegar a {cupo}, la Ronda 1 comenzará automáticamente."
+                        )
+                    with col_b:
+                        txt_ini = (
+                            f"▶️ Iniciar Ronda 1 ahora (con {num_inscritos} inscritos)"
+                            if num_inscritos > 0
+                            else "▶️ Iniciar Ronda 1 manualmente"
+                        )
+                        if st.button(txt_ini, type="primary", use_container_width=True):
+                            nuevo_c = num_inscritos if num_inscritos > 0 else cupo
+                            actualizar_sesion(juego, ronda_activa=1, fase="jugando", cupo=nuevo_c)
+                            st.session_state["seguir_ronda_activa"] = True
+                            st.session_state["ronda_proyectada"] = 1
+                            st.rerun()
+
+                    with st.expander(f"📋 Ver lista de estudiantes inscritos en sala de espera ({num_inscritos})", expanded=num_inscritos > 0):
+                        if df_inscritos.empty:
+                            st.caption("Aún ningún estudiante ha completado el formulario de inscripción.")
+                        else:
+                            st.dataframe(
+                                df_inscritos.rename(columns={"estudiante": "Nombre y Apellido", "cedula": "Cédula", "universidad": "Universidad"}),
+                                use_container_width=True,
+                                hide_index=True
+                            )
+
+                elif fase == "jugando":
+                    prog_jug = min(1.0, num_respuestas / cupo) if cupo > 0 else 0.0
+                    st.progress(prog_jug)
+                    col_a, col_b = st.columns([2, 1])
+                    with col_a:
+                        st.write(
+                            f"🎯 **Ronda {ronda_activa} abierta:** Los estudiantes están eligiendo su número (**{num_respuestas} de {cupo}** recibidos). "
+                            f"Al completarse las {cupo} jugadas, los resultados se mostrarán automáticamente."
+                        )
+                    with col_b:
+                        if st.button(f"🔓 Cerrar y Mostrar Resultados Ronda {ronda_activa}", type="primary", use_container_width=True):
+                            actualizar_sesion(juego, fase="resultados")
+                            st.session_state["seguir_ronda_activa"] = True
+                            st.session_state["ronda_proyectada"] = ronda_activa
+                            st.rerun()
+
+                    if not df_inscritos.empty:
+                        cedulas_jugaron = set(df_activa["cedula"].dropna().tolist())
+                        pendientes = df_inscritos[~df_inscritos["cedula"].isin(cedulas_jugaron)]
+                        with st.expander(f"👀 Estado de entrega por estudiante — Pendientes: {len(pendientes)}"):
+                            df_est_entrega = df_inscritos.copy()
+                            df_est_entrega["Estado"] = df_est_entrega["cedula"].apply(
+                                lambda c: "✅ Jugada enviada" if c in cedulas_jugaron else "⏳ Eligiendo número..."
+                            )
+                            st.dataframe(
+                                df_est_entrega[["estudiante", "universidad", "Estado"]].rename(
+                                    columns={"estudiante": "Estudiante", "universidad": "Universidad"}
+                                ),
+                                use_container_width=True,
+                                hide_index=True
+                            )
+
+                elif fase == "resultados":
+                    col_a, col_b, col_c = st.columns([2, 1.2, 0.8])
+                    with col_a:
+                        if ronda_activa < MAX_RONDAS:
+                            st.write(
+                                f"✅ **Resultados de Ronda {ronda_activa} visibles en celulares y proyector.** "
+                                f"Estudiantes marcados como listos: **{num_listos} / {cupo}**."
+                            )
+                        else:
+                            st.success(f"🏁 **Ronda {MAX_RONDAS} completada.** Resultados finales en pantalla.")
+                    with col_b:
+                        if ronda_activa < MAX_RONDAS:
+                            if st.button(f"➡️ 6º Activar Ronda {ronda_activa + 1}", type="primary", use_container_width=True):
+                                actualizar_sesion(juego, ronda_activa=ronda_activa + 1, fase="jugando")
+                                st.session_state["seguir_ronda_activa"] = True
+                                st.session_state["ronda_proyectada"] = ronda_activa + 1
+                                st.rerun()
+                        else:
+                            if st.button("🏁 Marcar experimento como Finalizado", type="primary", use_container_width=True):
+                                actualizar_sesion(juego, fase="finalizado")
+                                st.rerun()
+                    with col_c:
+                        if st.button(f"🔓 Reabrir Ronda {ronda_activa}", type="secondary", use_container_width=True):
+                            actualizar_sesion(juego, fase="jugando")
+                            st.rerun()
+
+                else:
+                    st.success(f"🎉 **Experimento finalizado ({MAX_RONDAS} rondas completadas).** Puedes explorar cada ronda abajo o reiniciar la partida arriba.")
+
+            # --- RECUADROS INTERACTIVOS COMO BOTONES PARA ELEGIR LA RONDA A PROYECTAR ---
+            st.markdown("##### 📌 Selecciona la ronda que deseas proyectar en pantalla:")
+            r_cols = st.columns(MAX_RONDAS)
+            for r_num in range(1, MAX_RONDAS + 1):
+                count_r = df_hist[df_hist["ronda"] == r_num]["participantes"].values
+                val = int(count_r[0]) if len(count_r) > 0 else 0
+                es_sel = (r_num == ronda_proy)
+                texto_alumnos = f"{val} alumno" if val == 1 else f"{val} alumnos"
+
+                with r_cols[r_num - 1]:
+                    with st.container(border=True):
+                        st.metric(f"Ronda {r_num}", texto_alumnos)
+                        texto_btn = "👁️ Proyectando" if es_sel else f"Ver Ronda {r_num}"
+                        if st.button(
+                            texto_btn,
+                            key=f"btn_ronda_sel_{r_num}",
+                            use_container_width=True,
+                            type="primary" if es_sel else "secondary"
+                        ):
+                            st.session_state["ronda_proyectada"] = r_num
+                            st.session_state["seguir_ronda_activa"] = (r_num == ronda_activa)
+                            st.rerun()
+
+            # --- RESULTADOS Y GRÁFICOS DE LA RONDA PROYECTADA ---
+            # Se muestran automáticamente en Etapa 5 ('resultados'/'finalizado') o al consultar rondas anteriores ya cerradas
+            ronda_proy_cerrada = (
+                (ronda_proy < ronda_activa)
+                or (ronda_proy == ronda_activa and fase in ("resultados", "finalizado"))
+            )
+
+            if ronda_proy_cerrada:
+                if df_proy.empty:
+                    st.warning(f"No hay respuestas registradas en la Ronda {ronda_proy}.")
+                else:
+                    st.divider()
+                    st.subheader(f"📊 Análisis y Resultados — Ronda {ronda_proy}")
+                    promedio = df_proy["decision"].mean()
+                    meta = (2.0 / 3.0) * promedio
+                    df_proy["distancia"] = (df_proy["decision"] - meta).abs()
+                    min_dist = df_proy["distancia"].min()
+                    ganadores = df_proy[df_proy["distancia"] == min_dist]
+
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("Promedio de la clase", f"{promedio:.2f}")
+                    c2.metric("🎯 Meta (2/3 del promedio)", f"{meta:.2f}")
+                    nombres_ganadores = ", ".join([
+                        f"{row['estudiante']} ({row['universidad']}) — {row['decision']:.1f}"
+                        if pd.notna(row.get("universidad")) and row.get("universidad")
+                        else f"{row['estudiante']} ({row['decision']:.1f})"
+                        for _, row in ganadores.iterrows()
+                    ])
+                    c3.metric("🏆 Ganador(es)", nombres_ganadores)
+
+                    fig = px.histogram(
+                        df_proy, x="decision", nbins=25,
+                        title=f"Distribución de Elecciones de la Clase — Ronda {ronda_proy}",
+                        labels={"decision": "Número Elegido", "count": "Frecuencia"},
+                        color_discrete_sequence=["#18243E"]
+                    )
+                    fig.add_vline(x=promedio, line_dash="dash", line_width=2.5, line_color="#3D1A4A", annotation_text=f"Promedio ({promedio:.1f})")
+                    fig.add_vline(x=meta, line_dash="solid", line_width=3, line_color="#E96132", annotation_text=f"Meta 2/3 ({meta:.1f})")
+                    fig.update_layout(
+                        xaxis=dict(range=[0, 100]),
+                        plot_bgcolor="#F7F8FC",
+                        paper_bgcolor="#FFFFFF",
+                        font=dict(family="Varela Round, Segoe UI, sans-serif", color="#18243E"),
+                        title_font=dict(color="#3D1A4A", size=18)
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+
+                    with st.expander("🧠 Guía de razonamiento estratégico (Niveles k) — Para debate docente", expanded=True):
+                        st.markdown(f"""
+                        **Resultados de la Ronda {ronda_proy}:** Promedio de la clase = **{promedio:.2f}** | Meta (2/3 del promedio) = **{meta:.2f}**
+
+                        ---
+                        ### 🧠 Guía de razonamiento estratégico (Niveles $k$):
+                        * **Nivel 0 (Ingenuo / Aleatorio):** Las personas eligen números al azar entre 0 y 100. El promedio esperado sería alrededor de **50**.
+                        * **Nivel 1 (Primer orden de deducción):** Si crees que los demás jugarán al azar (promedio 50), deberías jugar: $\\frac{2}{3} \\times 50 \\approx \\mathbf{{33.3}}$
+                        * **Nivel 2 (Segundo orden):** Si piensas que los demás son listos y jugarán 33.3, deberías anticiparte jugando: $\\frac{2}{3} \\times 33.3 \\approx \\mathbf{{22.2}}$
+                        * **Nivel 3:** Si todos hacen lo anterior: $\\frac{2}{3} \\times 22.2 \\approx \\mathbf{{14.8}}$
+                        * **Equilibrio de Nash (Racionalidad común infinita):** Si este proceso se repite infinitas veces, el único número donde nadie tiene incentivos a desviarse es el **0**.
+
+                        > ⚠️ **¡Pero cuidado!** En el mundo real no todos son perfectamente racionales. Si tú juegas 0 pero el resto juega 50, ¡perderás! Tu reto es predecir la profundidad de pensamiento de tus compañeros hoy.
+                        """)
+
+                    if len(df_hist) > 1:
+                        st.subheader("📈 Evolución a lo largo de las rondas (Convergencia hacia Nash)")
+                        fig_evol = px.line(
+                            df_hist, x="ronda", y="promedio", markers=True,
+                            title="Convergencia del Promedio hacia el Equilibrio de Nash (0)",
+                            labels={"ronda": "Ronda", "promedio": "Promedio de la decisión"},
+                            color_discrete_sequence=["#E96132"]
+                        )
+                        fig_evol.update_traces(
+                            line=dict(color="#E96132", width=3.2),
+                            marker=dict(size=10, color="#18243E", line=dict(width=2, color="#FFFFFF"))
+                        )
+                        fig_evol.update_layout(
+                            xaxis=dict(dtick=1),
+                            plot_bgcolor="#F7F8FC",
+                            paper_bgcolor="#FFFFFF",
+                            font=dict(family="Varela Round, Segoe UI, sans-serif", color="#18243E"),
+                            title_font=dict(color="#3D1A4A", size=18)
+                        )
+                        st.plotly_chart(fig_evol, use_container_width=True)
+
+                    with st.expander(f"📋 Ver tabla completa de registros de la Ronda {ronda_proy}"):
+                        df_mostrar = df_proy.rename(columns={
+                            "estudiante": "Nombre y Apellido",
+                            "cedula": "Cédula",
+                            "universidad": "Universidad",
+                            "decision": "Número Elegido",
+                            "distancia": "Distancia a la Meta"
+                        })
+                        st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
+            else:
+                st.info(
+                    f"🔒 **Resultados ocultos en el proyector mientras la sesión está en '{etiquetas_fase.get(fase, fase)}'** "
+                    "para no sesgar las decisiones de los estudiantes. Se mostrarán automáticamente apenas todos terminen de jugar."
+                )
+
+        render_panel_profesor_en_vivo(juego)
+
+        # --- CÓDIGO QR PERMANENTEMENTE VISIBLE PARA EL PROYECTOR ---
         st.divider()
         with st.container(border=True):
             col_qr1, col_qr2 = st.columns([1, 2])
@@ -767,11 +1371,12 @@ else:
             with col_qr2:
                 st.markdown("### 📱 ¡Únete al juego desde tu celular!")
                 st.markdown("""
-                * Apunta con la **cámara de tu teléfono** al código QR para ingresar directamente a la sala.
-                * No necesitas instalar ninguna aplicación.
+                1. Apunta con la **cámara de tu teléfono** al código QR para ingresar.
+                2. **Inscríbete** y espera en la **Sala de Espera** hasta completar el grupo.
+                3. Elige tu número en cada ronda y compite por acercarte a **2/3 del promedio**.
                 """)
                 url_editada = st.text_input(
-                    "🔗 Enlace web del juego (editable si cambia el dominio o IP):",
+                    "🔗 Enlace web del juego (editable si cambia el dominio):",
                     value=st.session_state["app_url"],
                     key="input_url_qr"
                 )
@@ -779,118 +1384,9 @@ else:
                     st.session_state["app_url"] = url_editada
                     st.rerun()
                 st.markdown(f"👉 **Enlace directo:** [{st.session_state['app_url']}]({st.session_state['app_url']})")
-        st.divider()
-                
-        revelar_defecto = st.session_state.get("revelar_resultados", estado_sesion == "cerrada")
-        revelar = st.toggle("🔓 Revelar resultados y gráficos en pantalla (Proyector)", value=revelar_defecto)
-        
-        if revelar:
-            if df.empty:
-                st.warning("Aún no hay respuestas registradas para esta ronda.")
-            else:
-                st.divider()
-                promedio = df["decision"].mean()
-                meta = (2 / 3) * promedio
-                df["distancia"] = (df["decision"] - meta).abs()
-                min_dist = df["distancia"].min()
-                ganadores = df[df["distancia"] == min_dist]
-                
-                c1, c2, c3 = st.columns(3)
-                c1.metric("Promedio de la clase", f"{promedio:.2f}")
-                c2.metric("Meta (2/3 del promedio)", f"{meta:.2f}")
-                nombres_ganadores = ", ".join([
-                    f"{row['estudiante']} ({row['universidad']}) — {row['decision']:.1f}" 
-                    if pd.notna(row.get('universidad')) and row.get('universidad') 
-                    else f"{row['estudiante']} ({row['decision']:.1f})" 
-                    for _, row in ganadores.iterrows()
-                ])
-                c3.metric("🏆 Ganador(es)", nombres_ganadores)
-                
-                fig = px.histogram(
-                    df, x="decision", nbins=25,
-                    title="Distribución de Elecciones de la Clase",
-                    labels={"decision": "Número Elegido", "count": "Frecuencia"},
-                    color_discrete_sequence=["#18243E"]
-                )
-                fig.add_vline(x=promedio, line_dash="dash", line_width=2.5, line_color="#3D1A4A", annotation_text=f"Promedio ({promedio:.1f})")
-                fig.add_vline(x=meta, line_dash="solid", line_width=3, line_color="#E96132", annotation_text=f"Meta 2/3 ({meta:.1f})")
-                fig.update_layout(
-                    xaxis=dict(range=[0, 100]),
-                    plot_bgcolor="#F7F8FC",
-                    paper_bgcolor="#FFFFFF",
-                    font=dict(family="Varela Round, Segoe UI, sans-serif", color="#18243E"),
-                    title_font=dict(color="#3D1A4A", size=18)
-                )
-                st.plotly_chart(fig, use_container_width=True)
-                
-                # Explicación pedagógica para la clase
-                with st.expander("🧠 Guía de razonamiento estratégico (Niveles k) — Para debate docente", expanded=True):
-                    st.markdown(f"""
-                    **Resultados de la ronda:** Promedio de la clase = **{promedio:.2f}** | Meta (2/3 del promedio) = **{meta:.2f}**
-                    
-                    ---
-                    ### 🧠 Guía de razonamiento estratégico (Niveles $k$):
-                    * **Nivel 0 (Ingenuo / Aleatorio):** Las personas eligen números al azar entre 0 y 100. El promedio esperado sería alrededor de **50**.
-                    * **Nivel 1 (Primer orden de deducción):** Si crees que los demás jugarán al azar (promedio 50), deberías jugar: $\\frac{2}{3} \\times 50 \\approx \\mathbf{33.3}$
-                    * **Nivel 2 (Segundo orden):** Si piensas que los demás son listos y jugarán 33.3, deberías anticiparte jugando: $\\frac{2}{3} \\times 33.3 \\approx \\mathbf{22.2}$
-                    * **Nivel 3:** Si todos hacen lo anterior: $\\frac{2}{3} \\times 22.2 \\approx \\mathbf{14.8}$
-                    * **Equilibrio de Nash (Racionalidad común infinita):** Si este proceso se repite infinitas veces, el único número donde nadie tiene incentivos a desviarse es el **0**.
 
-                    > ⚠️ **¡Pero cuidado!** En el mundo real no todos son perfectamente racionales. Si tú juegas 0 pero el resto juega 50, ¡perderás! Tu reto es predecir la profundidad de pensamiento de tus compañeros hoy.
-                    """)
-
-                if len(df_hist) > 1:
-                    st.subheader("📈 Evolución a lo largo de las rondas (Convergencia hacia Nash)")
-                    fig_evol = px.line(
-                        df_hist, x="ronda", y="promedio", markers=True,
-                        title="Convergencia del Promedio hacia el Equilibrio de Nash",
-                        labels={"ronda": "Ronda", "promedio": "Promedio de la decisión"},
-                        color_discrete_sequence=["#E96132"]
-                    )
-                    fig_evol.update_traces(
-                        line=dict(color="#E96132", width=3),
-                        marker=dict(size=10, color="#18243E", line=dict(width=2, color="#FFFFFF"))
-                    )
-                    fig_evol.update_layout(
-                        plot_bgcolor="#F8FAFC",
-                        paper_bgcolor="#FFFFFF",
-                        font=dict(family="Segoe UI, sans-serif", color="#18243E")
-                    )
-                    st.plotly_chart(fig_evol, use_container_width=True)
-                    
-                with st.expander("📋 Ver tabla completa de registros de la ronda"):
-                    df_mostrar = df.copy()
-                    col_map = {
-                        "estudiante": "Nombre y Apellido",
-                        "cedula": "Cédula",
-                        "universidad": "Universidad",
-                        "decision": "Número Elegido",
-                        "distancia": "Distancia a la Meta"
-                    }
-                    df_mostrar = df_mostrar.rename(columns={k: v for k, v in col_map.items() if k in df_mostrar.columns})
-                    st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
-                    
-        st.sidebar.divider()
-        st.sidebar.subheader("⚙️ Control de Partida")
-        with st.sidebar.popover("🗑️ Reiniciar Partida", use_container_width=True):
-            st.caption("Esta acción permitirá a los estudiantes jugar de nuevo desde la Ronda 1.")
-            if st.button("🧹 Reiniciar juego activo", use_container_width=True, key="sb_reset_current"):
-                with get_conn() as conn:
-                    conn.execute("DELETE FROM respuestas WHERE juego = ?", (juego,))
-                set_estado_sesion(juego, 1, "abierta")
-                st.session_state["revelar_resultados"] = False
-                st.success(f"'{juego}' reiniciado con éxito. Ronda 1 abierta.")
-                st.rerun()
-            if st.button("⚠️ Borrar toda la base de datos", use_container_width=True, key="sb_reset_all"):
-                with get_conn() as conn:
-                    conn.execute("DELETE FROM respuestas")
-                    conn.execute("DELETE FROM estado_sesion")
-                set_estado_sesion(juego, 1, "abierta")
-                st.session_state["revelar_resultados"] = False
-                st.success("Laboratorio reiniciado por completo.")
-                st.rerun()
     else:
         if clave:
             st.error("❌ Contraseña incorrecta. Por favor verifica tus credenciales.")
         else:
-            st.info("🔒 Ingresa la contraseña docente en la barra lateral izquierda para acceder al panel de control y proyector.")
+            st.info("🔒 Ingresa la contraseña docente en la barra lateral izquierda para configurar el número de estudiantes y controlar la sesión.")
