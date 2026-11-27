@@ -14,6 +14,89 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# --- PALETA INSTITUCIONAL: DEPARTAMENTO DE ECONOMÍA CUANTITATIVA (DeC - EPN) ---
+# Colores oficiales extraídos de https://economia.epn.edu.ec/:
+# Azul primario institucional: #18243E
+# Naranja / Terracota DeC: #E96132 (con variante hover #FF691C)
+# Amarillo / Dorado institucional: #F5B335
+# Fondo claro y secundario: #FFFFFF y #F4F6F9
+st.markdown("""
+<style>
+    /* Tipografía y encabezados con el azul institucional de economia.epn.edu.ec */
+    h1, h2, h3, h4, h5, h6 {
+        color: #18243E !important;
+        font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif !important;
+    }
+    
+    /* Botones primarios (estilo uk-button-primary de economia.epn.edu.ec) */
+    button[kind="primary"] {
+        background: linear-gradient(45deg, #18243E 40%, #160A4C) !important;
+        color: #FFFFFF !important;
+        border: 2px solid transparent !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        box-shadow: 0 4px 12px rgba(24, 36, 62, 0.25) !important;
+        transition: all 0.25s ease-in-out !important;
+    }
+    button[kind="primary"]:hover {
+        background: linear-gradient(45deg, #E96132 40%, #FF691C) !important;
+        box-shadow: 0 6px 18px rgba(233, 97, 50, 0.45) !important;
+        transform: translateY(-1px) !important;
+        border-color: transparent !important;
+        color: #FFFFFF !important;
+    }
+    
+    /* Botones secundarios */
+    button[kind="secondary"] {
+        border: 1.5px solid #18243E !important;
+        color: #18243E !important;
+        border-radius: 8px !important;
+        font-weight: 500 !important;
+        transition: all 0.2s ease-in-out !important;
+    }
+    button[kind="secondary"]:hover {
+        border-color: #E96132 !important;
+        color: #E96132 !important;
+        background-color: #FFF5F2 !important;
+    }
+
+    /* Barra de progreso con el color institucional naranja DeC */
+    .stProgress > div > div > div > div {
+        background: linear-gradient(90deg, #18243E, #E96132) !important;
+    }
+
+    /* Pestañas (Tabs) */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        color: #18243E !important;
+        font-weight: 600;
+        border-radius: 6px 6px 0 0;
+    }
+    .stTabs [aria-selected="true"] {
+        border-bottom: 3px solid #E96132 !important;
+        color: #E96132 !important;
+    }
+
+    /* Contenedores con borde destacados */
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        border-color: #E2E8F0 !important;
+        border-radius: 10px !important;
+    }
+    
+    /* Métricas */
+    [data-testid="stMetricValue"] {
+        color: #18243E !important;
+        font-weight: 700 !important;
+    }
+    [data-testid="stMetricLabel"] {
+        color: #5A6A85 !important;
+        font-weight: 600 !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 MAX_RONDAS = 5
 DEFAULT_APP_URL = st.secrets.get("APP_URL", "https://juego-keynes-epn.streamlit.app/")
 
@@ -516,11 +599,16 @@ else:
                     df, x="decision", nbins=25,
                     title="Distribución de Elecciones de la Clase",
                     labels={"decision": "Número Elegido", "count": "Frecuencia"},
-                    color_discrete_sequence=["#1f77b4"]
+                    color_discrete_sequence=["#18243E"]
                 )
-                fig.add_vline(x=promedio, line_dash="dash", line_color="blue", annotation_text=f"Promedio ({promedio:.1f})")
-                fig.add_vline(x=meta, line_dash="solid", line_color="red", annotation_text=f"Meta 2/3 ({meta:.1f})")
-                fig.update_layout(xaxis=dict(range=[0, 100]))
+                fig.add_vline(x=promedio, line_dash="dash", line_color="#18243E", annotation_text=f"Promedio ({promedio:.1f})")
+                fig.add_vline(x=meta, line_dash="solid", line_color="#E96132", annotation_text=f"Meta 2/3 ({meta:.1f})")
+                fig.update_layout(
+                    xaxis=dict(range=[0, 100]),
+                    plot_bgcolor="#F8FAFC",
+                    paper_bgcolor="#FFFFFF",
+                    font=dict(family="Segoe UI, sans-serif", color="#18243E")
+                )
                 st.plotly_chart(fig, use_container_width=True)
                 
                 # Explicación pedagógica para la clase
@@ -544,7 +632,17 @@ else:
                     fig_evol = px.line(
                         df_hist, x="ronda", y="promedio", markers=True,
                         title="Convergencia del Promedio hacia el Equilibrio de Nash",
-                        labels={"ronda": "Ronda", "promedio": "Promedio de la decisión"}
+                        labels={"ronda": "Ronda", "promedio": "Promedio de la decisión"},
+                        color_discrete_sequence=["#E96132"]
+                    )
+                    fig_evol.update_traces(
+                        line=dict(color="#E96132", width=3),
+                        marker=dict(size=10, color="#18243E", line=dict(width=2, color="#FFFFFF"))
+                    )
+                    fig_evol.update_layout(
+                        plot_bgcolor="#F8FAFC",
+                        paper_bgcolor="#FFFFFF",
+                        font=dict(family="Segoe UI, sans-serif", color="#18243E")
                     )
                     st.plotly_chart(fig_evol, use_container_width=True)
                     
