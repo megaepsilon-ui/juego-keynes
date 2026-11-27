@@ -91,6 +91,61 @@ def set_estado_sesion(juego, ronda, estado):
             ON CONFLICT(juego) DO UPDATE SET ronda_activa=excluded.ronda_activa, estado=excluded.estado
         """, (juego, ronda, estado))
 
+@st.fragment(run_every=2)
+def render_resumen_en_vivo_estudiante(juego, r_res, mi_decision, estudiante, dict_jugadas, rondas_jugadas):
+    st.markdown(f"### 📊 Resultados de tu Ronda {r_res} de {MAX_RONDAS}")
+    st.progress(r_res / MAX_RONDAS)
+    
+    with get_conn() as conn:
+        df_ronda_clase = pd.read_sql_query(
+            "SELECT decision FROM respuestas WHERE juego = ? AND ronda = ?",
+            conn, params=(juego, r_res)
+        )
+    
+    promedio_clase = df_ronda_clase["decision"].mean() if not df_ronda_clase.empty else mi_decision
+    meta_clase = (2 / 3) * promedio_clase
+    distancia_mi = abs(mi_decision - meta_clase)
+    total_jugadores = len(df_ronda_clase)
+    
+    with st.container(border=True):
+        st.markdown("#### 🎯 Resultados de la Ronda (actualizándose en vivo):")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Tu número", f"{mi_decision:.1f}")
+        c2.metric("Promedio clase", f"{promedio_clase:.2f}")
+        c3.metric("Meta (2/3)", f"{meta_clase:.2f}")
+        
+        st.divider()
+        st.write(f"📏 **Tu distancia a la meta ganadora:** **{distancia_mi:.2f}** unidades")
+        st.caption(f"👥 Respuestas registradas en la clase: **{total_jugadores}** 🟢 *(actualizando en vivo cada 2 segundos)*")
+        
+        if distancia_mi <= 3.0:
+            st.success("🌟 ¡Excelente intuición! Tu número estuvo sumamente cerca de la meta ganadora.")
+        elif mi_decision > meta_clase:
+            st.info(f"💡 **Retroalimentación:** Tu número ({mi_decision:.1f}) estuvo **por encima** de la meta ({meta_clase:.2f}). Recuerda que la meta es 2/3 del promedio. ¡Para la siguiente ronda la clase tenderá a jugar números más bajos!")
+        else:
+            st.info(f"💡 **Retroalimentación:** Tu número ({mi_decision:.1f}) estuvo **por debajo** de la meta ({meta_clase:.2f}). ¡Interesante estrategia! Observa la meta calculada para calibrar tu siguiente jugada.")
+    
+    if r_res < MAX_RONDAS:
+        st.divider()
+        st.markdown(f"##### ¿Listo para la Ronda {r_res + 1}?")
+        st.caption(f"Toma en cuenta la meta actual (**{meta_clase:.2f}**) para estimar tu siguiente número estratégico.")
+        if st.button(f"➡️ Continuar a la Ronda {r_res + 1}", type="primary", use_container_width=True):
+            st.session_state[f"continuar_despues_de_{r_res}"] = True
+            st.rerun()
+    else:
+        st.divider()
+        if not st.session_state.get(f"globos_mostrados_{r_res}", False):
+            st.balloons()
+            st.session_state[f"globos_mostrados_{r_res}"] = True
+        st.success(f"🎉 **¡Felicitaciones, {estudiante}! Has completado las {MAX_RONDAS} rondas del juego.**")
+        
+        df_resumen = pd.DataFrame([
+            {"Ronda": r, "Tu Decisión": dict_jugadas[r]} for r in rondas_jugadas
+        ])
+        st.subheader("📋 Resumen histórico de tus decisiones:")
+        st.dataframe(df_resumen, use_container_width=True, hide_index=True)
+        st.info("👀 Observa el proyector para ver el análisis de la clase y la convergencia hacia el Equilibrio de Nash.")
+
 # --- BARRA LATERAL: CONFIGURACIÓN ---
 st.sidebar.image("https://upload.wikimedia.org/wikipedia/commons/8/8c/Escudo_de_la_Escuela_Polit%C3%A9cnica_Nacional.png", width=90)
 st.sidebar.title("Laboratorio Keynes")
@@ -211,61 +266,11 @@ if rol == "👨‍🎓 Estudiante":
             # Alternativa B: Al enviar una ronda, mostrar pantalla de resumen antes de permitir pasar a la siguiente
             debe_ver_resumen = (ultima_ronda > 0) and not st.session_state.get(f"continuar_despues_de_{ultima_ronda}", False)
 
-            # Caso 1: Mostrar resumen de la ronda recién enviada antes de avanzar
+            # Caso 1: Mostrar resumen de la ronda recién enviada antes de avanzar (se actualiza en vivo cada 2s)
             if debe_ver_resumen:
                 r_res = ultima_ronda
                 mi_decision = dict_jugadas[r_res]
-                
-                st.markdown(f"### 📊 Resultados de tu Ronda {r_res} de {MAX_RONDAS}")
-                st.progress(r_res / MAX_RONDAS)
-                
-                with get_conn() as conn:
-                    df_ronda_clase = pd.read_sql_query(
-                        "SELECT decision FROM respuestas WHERE juego = ? AND ronda = ?",
-                        conn, params=(juego, r_res)
-                    )
-                
-                promedio_clase = df_ronda_clase["decision"].mean() if not df_ronda_clase.empty else mi_decision
-                meta_clase = (2 / 3) * promedio_clase
-                distancia_mi = abs(mi_decision - meta_clase)
-                total_jugadores = len(df_ronda_clase)
-                
-                with st.container(border=True):
-                    st.markdown("#### 🎯 Resultados de la Ronda:")
-                    c1, c2, c3 = st.columns(3)
-                    c1.metric("Tu número", f"{mi_decision:.1f}")
-                    c2.metric("Promedio clase", f"{promedio_clase:.2f}")
-                    c3.metric("Meta (2/3)", f"{meta_clase:.2f}")
-                    
-                    st.divider()
-                    st.write(f"📏 **Tu distancia a la meta ganadora:** **{distancia_mi:.2f}** unidades")
-                    st.caption(f"👥 Respuestas registradas en la clase para esta ronda: **{total_jugadores}**")
-                    
-                    if distancia_mi <= 3.0:
-                        st.success("🌟 ¡Excelente intuición! Tu número estuvo sumamente cerca de la meta ganadora.")
-                    elif mi_decision > meta_clase:
-                        st.info(f"💡 **Retroalimentación:** Tu número ({mi_decision:.1f}) estuvo **por encima** de la meta ({meta_clase:.2f}). Recuerda que la meta es 2/3 del promedio. ¡Para la siguiente ronda la clase tenderá a jugar números más bajos!")
-                    else:
-                        st.info(f"💡 **Retroalimentación:** Tu número ({mi_decision:.1f}) estuvo **por debajo** de la meta ({meta_clase:.2f}). ¡Interesante estrategia! Observa la meta calculada para calibrar tu siguiente jugada.")
-                
-                if r_res < MAX_RONDAS:
-                    st.divider()
-                    st.markdown(f"##### ¿Listo para la Ronda {r_res + 1}?")
-                    st.caption(f"Toma en cuenta la meta de esta ronda (**{meta_clase:.2f}**) para estimar tu siguiente número estratégico.")
-                    if st.button(f"➡️ Continuar a la Ronda {r_res + 1}", type="primary", use_container_width=True):
-                        st.session_state[f"continuar_despues_de_{r_res}"] = True
-                        st.rerun()
-                else:
-                    st.divider()
-                    st.balloons()
-                    st.success(f"🎉 **¡Felicitaciones, {estudiante}! Has completado las {MAX_RONDAS} rondas del juego.**")
-                    
-                    df_resumen = pd.DataFrame([
-                        {"Ronda": r, "Tu Decisión": dict_jugadas[r]} for r in rondas_jugadas
-                    ])
-                    st.subheader("📋 Resumen histórico de tus decisiones:")
-                    st.dataframe(df_resumen, use_container_width=True, hide_index=True)
-                    st.info("👀 Observa el proyector para ver el análisis de la clase y la convergencia hacia el Equilibrio de Nash.")
+                render_resumen_en_vivo_estudiante(juego, r_res, mi_decision, estudiante, dict_jugadas, rondas_jugadas)
 
             # Caso 2: Ya completó las 5 rondas y ya revisó el resumen
             elif len(rondas_jugadas) >= MAX_RONDAS:
