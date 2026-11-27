@@ -5,6 +5,7 @@ import plotly.express as px
 import io
 import urllib.parse
 import random
+import os
 
 st.set_page_config(
     page_title="Laboratorio de Teoría de Juegos | EPN",
@@ -147,7 +148,12 @@ def render_resumen_en_vivo_estudiante(juego, r_res, mi_decision, estudiante, dic
         st.info("👀 Observa el proyector para ver el análisis de la clase y la convergencia hacia el Equilibrio de Nash.")
 
 # --- BARRA LATERAL: CONFIGURACIÓN ---
-st.sidebar.image("https://upload.wikimedia.org/wikipedia/commons/8/8c/Escudo_de_la_Escuela_Polit%C3%A9cnica_Nacional.png", width=90)
+col_sb1, col_sb2 = st.sidebar.columns([1, 1])
+with col_sb1:
+    st.image("https://upload.wikimedia.org/wikipedia/commons/8/8c/Escudo_de_la_Escuela_Polit%C3%A9cnica_Nacional.png", width=75)
+with col_sb2:
+    if os.path.exists("logo_dec.png"):
+        st.image("logo_dec.png", width=78)
 st.sidebar.title("Laboratorio Keynes")
 rol = st.sidebar.radio("Modo de vista:", ["👨‍🎓 Estudiante", "👨‍🏫 Profesor (Proyector)"])
 
@@ -167,8 +173,13 @@ st.sidebar.caption(f"[{st.session_state['app_url']}]({st.session_state['app_url'
 # VISTA DEL ESTUDIANTE
 # ==============================================================================
 if rol == "👨‍🎓 Estudiante":
-    st.title("🎯 Concurso de Belleza de Keynes")
-    st.caption(f"Experimento de Teoría de Juegos (2/3 del promedio) — **Máximo {MAX_RONDAS} rondas**")
+    col_t1, col_t2 = st.columns([5, 1])
+    with col_t1:
+        st.title("🎯 Concurso de Belleza de Keynes")
+        st.caption(f"Experimento de Teoría de Juegos (2/3 del promedio) — **Máximo {MAX_RONDAS} rondas**")
+    with col_t2:
+        if os.path.exists("logo_dec.png"):
+            st.image("logo_dec.png", width=95)
     
     # --- PESTAÑAS: JUEGO / GUÍA Y EXPLICACIÓN ---
     tab_jugar, tab_guia = st.tabs([
@@ -344,8 +355,13 @@ else:
     
     ronda = st.session_state["ronda_proyectada"]
     
-    st.title("📊 Panel de Control del Profesor")
-    st.caption(f"Visualización central para proyector — **Mostrando Ronda {ronda} de {MAX_RONDAS}**")
+    col_pt1, col_pt2 = st.columns([5, 1])
+    with col_pt1:
+        st.title("📊 Panel de Control del Profesor")
+        st.caption(f"Visualización central para proyector — **Mostrando Ronda {ronda} de {MAX_RONDAS}**")
+    with col_pt2:
+        if os.path.exists("logo_dec.png"):
+            st.image("logo_dec.png", width=110)
     
     # Obtener contraseña desde secrets si existe, o usar predeterminada
     docente_password = st.secrets.get("DOCENTE_PASSWORD", "epn2026")
