@@ -6,96 +6,313 @@ import io
 import urllib.parse
 import random
 import os
+import base64
 
 st.set_page_config(
-    page_title="Laboratorio de Teoría de Juegos | EPN",
+    page_title="Laboratorio de Teoría de Juegos | DeC - EPN",
     page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- PALETA INSTITUCIONAL: DEPARTAMENTO DE ECONOMÍA CUANTITATIVA (DeC - EPN) ---
-# Colores oficiales extraídos de https://economia.epn.edu.ec/:
-# Azul primario institucional: #18243E
-# Naranja / Terracota DeC: #E96132 (con variante hover #FF691C)
-# Amarillo / Dorado institucional: #F5B335
-# Fondo claro y secundario: #FFFFFF y #F4F6F9
+# --- IDENTIDAD VISUAL OFICIAL: https://economia.epn.edu.ec/ (DeC - EPN) ---
+# Paleta extraída directamente de theme.9.css de economia.epn.edu.ec y logotipo DeC:
+# - Azul Marino Primario (uk-section-primary / uk-button-primary): #18243E -> #190F47
+# - Naranja Terracota Secundario (uk-section-secondary / uk-button-secondary): #E96132 -> #F46318
+# - Púrpura Institucional de Títulos (uk-h1..h6): #3D1A4A
+# - Dorado DeC: #F0B840 | Rojo DeC: #E01818 | Texto cuerpo: #4A5568 / #868585
+# - Tipografía oficial del portal: 'Varela Round'
 st.markdown("""
 <style>
-    /* Tipografía y encabezados con el azul institucional de economia.epn.edu.ec */
-    h1, h2, h3, h4, h5, h6 {
+    @import url('https://fonts.googleapis.com/css2?family=Varela+Round&family=Inter:wght@400;500;600;700&display=swap');
+
+    /* Fondo principal claro institucional (independiente del modo oscuro del navegador) */
+    .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
+        background-color: #F7F8FC !important;
         color: #18243E !important;
-        font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif !important;
+        font-family: 'Inter', 'Segoe UI', sans-serif !important;
     }
-    
-    /* Botones primarios (estilo uk-button-primary de economia.epn.edu.ec) */
-    button[kind="primary"] {
-        background: linear-gradient(45deg, #18243E 40%, #160A4C) !important;
-        color: #FFFFFF !important;
-        border: 2px solid transparent !important;
-        border-radius: 8px !important;
-        font-weight: 600 !important;
-        box-shadow: 0 4px 12px rgba(24, 36, 62, 0.25) !important;
-        transition: all 0.25s ease-in-out !important;
-    }
-    button[kind="primary"]:hover {
-        background: linear-gradient(45deg, #E96132 40%, #FF691C) !important;
-        box-shadow: 0 6px 18px rgba(233, 97, 50, 0.45) !important;
-        transform: translateY(-1px) !important;
-        border-color: transparent !important;
-        color: #FFFFFF !important;
-    }
-    
-    /* Botones secundarios */
-    button[kind="secondary"] {
-        border: 1.5px solid #18243E !important;
-        color: #18243E !important;
-        border-radius: 8px !important;
-        font-weight: 500 !important;
-        transition: all 0.2s ease-in-out !important;
-    }
-    button[kind="secondary"]:hover {
-        border-color: #E96132 !important;
-        color: #E96132 !important;
-        background-color: #FFF5F2 !important;
+    [data-testid="stHeader"] {
+        background-color: rgba(247, 248, 252, 0.88) !important;
     }
 
-    /* Barra de progreso con el color institucional naranja DeC */
+    /* Tipografía de títulos estilo economia.epn.edu.ec (Varela Round + #3D1A4A / #18243E) */
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'Varela Round', 'Segoe UI', sans-serif !important;
+        color: #18243E !important;
+        letter-spacing: -0.01em;
+    }
+    [data-testid="stMain"] h2, [data-testid="stMain"] h3 {
+        color: #3D1A4A !important;
+    }
+    [data-testid="stMain"] p, [data-testid="stMain"] li, [data-testid="stMain"] label {
+        color: #2D3748 !important;
+    }
+
+    /* --- BARRA LATERAL AZUL MARINO INSTITUCIONAL (#18243E -> #190F47) --- */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #18243E 0%, #190F47 100%) !important;
+        border-right: 4px solid #E96132 !important;
+    }
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3,
+    [data-testid="stSidebar"] h4,
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] span,
+    [data-testid="stSidebar"] [data-testid="stCaptionContainer"] {
+        color: #FFFFFF !important;
+    }
+    [data-testid="stSidebar"] a {
+        color: #F0B840 !important;
+        font-weight: 600 !important;
+    }
+    [data-testid="stSidebar"] hr {
+        border-color: rgba(255, 255, 255, 0.18) !important;
+    }
+    /* Tarjetas blancas para escudos y código QR en la barra lateral */
+    [data-testid="stSidebar"] [data-testid="stImage"] img {
+        background-color: #FFFFFF !important;
+        padding: 8px !important;
+        border-radius: 12px !important;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22) !important;
+    }
+    /* Caja destacada en barra lateral */
+    [data-testid="stSidebar"] [data-testid="stAlert"] {
+        background: rgba(233, 97, 50, 0.2) !important;
+        border: 1px solid #E96132 !important;
+        border-radius: 10px !important;
+    }
+    /* Inputs dentro de la barra lateral */
+    [data-testid="stSidebar"] [data-baseweb="input"] {
+        background-color: #FFFFFF !important;
+        border: 1.5px solid #E96132 !important;
+        border-radius: 8px !important;
+    }
+    [data-testid="stSidebar"] input {
+        color: #18243E !important;
+        -webkit-text-fill-color: #18243E !important;
+        background-color: #FFFFFF !important;
+    }
+    [data-testid="stSidebar"] [data-baseweb="input"] button svg {
+        fill: #18243E !important;
+    }
+    /* Botones dentro de la barra lateral */
+    [data-testid="stSidebar"] button {
+        background: rgba(255, 255, 255, 0.12) !important;
+        color: #FFFFFF !important;
+        border: 1px solid rgba(255, 255, 255, 0.35) !important;
+        border-radius: 8px !important;
+    }
+    [data-testid="stSidebar"] button:hover {
+        background: linear-gradient(45deg, #E96132 40%, #F46318) !important;
+        border-color: #E96132 !important;
+        color: #FFFFFF !important;
+    }
+
+    /* --- BANNER SUPERIOR INSTITUCIONAL (ESTILO HERO economia.epn.edu.ec) --- */
+    .dec-hero-banner {
+        background: linear-gradient(125deg, #18243E 0%, #190F47 65%, #3D1A4A 100%);
+        border-radius: 16px;
+        padding: 22px 28px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        box-shadow: 0 14px 34px rgba(24, 36, 62, 0.18);
+        border-bottom: 5px solid #E96132;
+        position: relative;
+        overflow: hidden;
+    }
+    .dec-hero-badge {
+        display: inline-block;
+        background: linear-gradient(45deg, #E96132 40%, #F46318);
+        color: #FFFFFF !important;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        padding: 4px 12px;
+        border-radius: 999px;
+        margin-bottom: 8px;
+    }
+    .dec-hero-title {
+        font-family: 'Varela Round', 'Segoe UI', sans-serif !important;
+        color: #FFFFFF !important;
+        font-size: 1.85rem;
+        font-weight: 700;
+        margin: 0 0 4px 0 !important;
+        line-height: 1.2;
+    }
+    .dec-hero-sub {
+        color: rgba(255, 255, 255, 0.85) !important;
+        font-size: 0.95rem;
+        margin: 0 !important;
+    }
+    .dec-hero-logo-box {
+        background: #FFFFFF;
+        padding: 10px 14px;
+        border-radius: 12px;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .dec-hero-logo-box img {
+        height: 68px;
+        width: auto;
+        display: block;
+    }
+    @media (max-width: 640px) {
+        .dec-hero-banner {
+            padding: 16px 18px;
+            flex-direction: row;
+        }
+        .dec-hero-title {
+            font-size: 1.35rem;
+        }
+        .dec-hero-logo-box img {
+            height: 50px;
+        }
+    }
+
+    /* --- BOTONES DE ACCIÓN (uk-button-secondary #E96132 y uk-button-primary #18243E) --- */
+    [data-testid="stMain"] button[kind="primary"],
+    [data-testid="stMain"] button[kind="primaryFormSubmit"],
+    [data-testid="stMain"] [data-testid="stFormSubmitButton"] button {
+        background: linear-gradient(45deg, #E96132 40%, #F46318) !important;
+        color: #FFFFFF !important;
+        border: none !important;
+        border-radius: 10px !important;
+        font-family: 'Varela Round', 'Segoe UI', sans-serif !important;
+        font-weight: 600 !important;
+        padding: 0.55rem 1.2rem !important;
+        box-shadow: 0 6px 18px rgba(233, 97, 50, 0.35) !important;
+        transition: all 0.22s ease-in-out !important;
+    }
+    [data-testid="stMain"] button[kind="primary"] *,
+    [data-testid="stMain"] button[kind="primaryFormSubmit"] *,
+    [data-testid="stMain"] [data-testid="stFormSubmitButton"] button * {
+        color: #FFFFFF !important;
+    }
+    [data-testid="stMain"] button[kind="primary"]:hover,
+    [data-testid="stMain"] button[kind="primaryFormSubmit"]:hover,
+    [data-testid="stMain"] [data-testid="stFormSubmitButton"] button:hover {
+        background: linear-gradient(45deg, #18243E 40%, #3D1A4A) !important;
+        box-shadow: 0 8px 22px rgba(24, 36, 62, 0.38) !important;
+        transform: translateY(-1px) !important;
+    }
+
+    /* Botones secundarios en el área principal */
+    [data-testid="stMain"] button[kind="secondary"] {
+        background-color: #FFFFFF !important;
+        border: 1.8px solid #18243E !important;
+        color: #18243E !important;
+        border-radius: 10px !important;
+        font-weight: 600 !important;
+        transition: all 0.2s ease-in-out !important;
+    }
+    [data-testid="stMain"] button[kind="secondary"] * {
+        color: #18243E !important;
+    }
+    [data-testid="stMain"] button[kind="secondary"]:hover {
+        background-color: #18243E !important;
+        border-color: #18243E !important;
+        color: #FFFFFF !important;
+    }
+    [data-testid="stMain"] button[kind="secondary"]:hover * {
+        color: #FFFFFF !important;
+    }
+
+    /* --- TARJETAS Y FORMULARIOS (uk-card-default de economia.epn.edu.ec) --- */
+    [data-testid="stMain"] [data-testid="stVerticalBlockBorderWrapper"] {
+        background-color: #FFFFFF !important;
+        border: 1px solid #E2E8F0 !important;
+        border-top: 4px solid #18243E !important;
+        border-radius: 12px !important;
+        box-shadow: 0 10px 30px 0 rgba(24, 36, 62, 0.07) !important;
+    }
+    [data-testid="stMain"] [data-testid="stForm"] {
+        background-color: #FFFFFF !important;
+        border: 1px solid #E2E8F0 !important;
+        border-top: 4px solid #E96132 !important;
+        border-radius: 12px !important;
+        box-shadow: 0 10px 30px 0 rgba(24, 36, 62, 0.07) !important;
+    }
+
+    /* Inputs en el área principal */
+    [data-testid="stMain"] [data-baseweb="input"],
+    [data-testid="stMain"] [data-baseweb="select"] > div {
+        background-color: #FFFFFF !important;
+        border-color: #CBD5E1 !important;
+        color: #18243E !important;
+    }
+    [data-testid="stMain"] input {
+        color: #18243E !important;
+        -webkit-text-fill-color: #18243E !important;
+    }
+
+    /* Barra de progreso con degradado institucional DeC */
     .stProgress > div > div > div > div {
-        background: linear-gradient(90deg, #18243E, #E96132) !important;
+        background: linear-gradient(90deg, #18243E 0%, #E96132 65%, #F0B840 100%) !important;
     }
 
     /* Pestañas (Tabs) */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
+        gap: 10px;
+        border-bottom: 2px solid #E2E8F0;
     }
     .stTabs [data-baseweb="tab"] {
+        font-family: 'Varela Round', 'Segoe UI', sans-serif !important;
         color: #18243E !important;
         font-weight: 600;
-        border-radius: 6px 6px 0 0;
+        padding: 10px 18px;
+        border-radius: 8px 8px 0 0;
     }
     .stTabs [aria-selected="true"] {
+        background-color: rgba(233, 97, 50, 0.1) !important;
         border-bottom: 3px solid #E96132 !important;
         color: #E96132 !important;
     }
 
-    /* Contenedores con borde destacados */
-    [data-testid="stVerticalBlockBorderWrapper"] {
-        border-color: #E2E8F0 !important;
-        border-radius: 10px !important;
-    }
-    
     /* Métricas */
     [data-testid="stMetricValue"] {
+        font-family: 'Varela Round', 'Segoe UI', sans-serif !important;
         color: #18243E !important;
         font-weight: 700 !important;
     }
     [data-testid="stMetricLabel"] {
-        color: #5A6A85 !important;
+        color: #5A6578 !important;
         font-weight: 600 !important;
     }
 </style>
 """, unsafe_allow_html=True)
+
+def get_logo_b64():
+    if os.path.exists("logo_dec.png"):
+        with open("logo_dec.png", "rb") as f:
+            return base64.b64encode(f.read()).decode("utf-8")
+    return ""
+
+def render_encabezado_institucional(titulo, subtitulo):
+    logo_b64 = get_logo_b64()
+    logo_html = (
+        f'<div class="dec-hero-logo-box"><img src="data:image/png;base64,{logo_b64}" alt="Logo DeC EPN"></div>'
+        if logo_b64 else ""
+    )
+    st.markdown(f"""
+    <div class="dec-hero-banner">
+        <div>
+            <div class="dec-hero-badge">Departamento de Economía Cuantitativa · EPN</div>
+            <div class="dec-hero-title">{titulo}</div>
+            <p class="dec-hero-sub">{subtitulo}</p>
+        </div>
+        {logo_html}
+    </div>
+    """, unsafe_allow_html=True)
 
 MAX_RONDAS = 5
 DEFAULT_APP_URL = st.secrets.get("APP_URL", "https://juego-keynes-epn.streamlit.app/")
@@ -256,13 +473,10 @@ st.sidebar.caption(f"[{st.session_state['app_url']}]({st.session_state['app_url'
 # VISTA DEL ESTUDIANTE
 # ==============================================================================
 if rol == "👨‍🎓 Estudiante":
-    col_t1, col_t2 = st.columns([5, 1])
-    with col_t1:
-        st.title("🎯 Concurso de Belleza de Keynes")
-        st.caption(f"Experimento de Teoría de Juegos (2/3 del promedio) — **Máximo {MAX_RONDAS} rondas**")
-    with col_t2:
-        if os.path.exists("logo_dec.png"):
-            st.image("logo_dec.png", width=95)
+    render_encabezado_institucional(
+        "🎯 Concurso de Belleza de Keynes",
+        f"Experimento interactivo de Teoría de Juegos (2/3 del promedio) — Máximo {MAX_RONDAS} rondas"
+    )
     
     # --- PESTAÑAS: JUEGO / GUÍA Y EXPLICACIÓN ---
     tab_jugar, tab_guia = st.tabs([
@@ -319,7 +533,7 @@ if rol == "👨‍🎓 Estudiante":
                         "Universidad Central del Ecuador"
                     ]
                 )
-                btn_registro = st.form_submit_button("✅ Guardar y Comenzar a Jugar", use_container_width=True)
+                btn_registro = st.form_submit_button("✅ Guardar y Comenzar a Jugar", type="primary", use_container_width=True)
                 
                 if btn_registro:
                     if not nombre_in:
@@ -414,7 +628,7 @@ if rol == "👨‍🎓 Estudiante":
                     
                     st.divider()
                     texto_boton = f"🚀 Confirmar y Enviar Ronda {ronda_a_jugar}" if ronda_a_jugar < MAX_RONDAS else "🏁 Confirmar y Finalizar Ronda 5"
-                    enviado = st.form_submit_button(texto_boton, use_container_width=True)
+                    enviado = st.form_submit_button(texto_boton, type="primary", use_container_width=True)
                     
                     if enviado:
                         try:
@@ -438,13 +652,10 @@ else:
     
     ronda = st.session_state["ronda_proyectada"]
     
-    col_pt1, col_pt2 = st.columns([5, 1])
-    with col_pt1:
-        st.title("📊 Panel de Control del Profesor")
-        st.caption(f"Visualización central para proyector — **Mostrando Ronda {ronda} de {MAX_RONDAS}**")
-    with col_pt2:
-        if os.path.exists("logo_dec.png"):
-            st.image("logo_dec.png", width=110)
+    render_encabezado_institucional(
+        "📊 Panel de Control del Profesor",
+        f"Visualización central para proyector — Mostrando Ronda {ronda} de {MAX_RONDAS}"
+    )
     
     # Obtener contraseña desde secrets si existe, o usar predeterminada
     docente_password = st.secrets.get("DOCENTE_PASSWORD", "epn2026")
@@ -601,13 +812,14 @@ else:
                     labels={"decision": "Número Elegido", "count": "Frecuencia"},
                     color_discrete_sequence=["#18243E"]
                 )
-                fig.add_vline(x=promedio, line_dash="dash", line_color="#18243E", annotation_text=f"Promedio ({promedio:.1f})")
-                fig.add_vline(x=meta, line_dash="solid", line_color="#E96132", annotation_text=f"Meta 2/3 ({meta:.1f})")
+                fig.add_vline(x=promedio, line_dash="dash", line_width=2.5, line_color="#3D1A4A", annotation_text=f"Promedio ({promedio:.1f})")
+                fig.add_vline(x=meta, line_dash="solid", line_width=3, line_color="#E96132", annotation_text=f"Meta 2/3 ({meta:.1f})")
                 fig.update_layout(
                     xaxis=dict(range=[0, 100]),
-                    plot_bgcolor="#F8FAFC",
+                    plot_bgcolor="#F7F8FC",
                     paper_bgcolor="#FFFFFF",
-                    font=dict(family="Segoe UI, sans-serif", color="#18243E")
+                    font=dict(family="Varela Round, Segoe UI, sans-serif", color="#18243E"),
+                    title_font=dict(color="#3D1A4A", size=18)
                 )
                 st.plotly_chart(fig, use_container_width=True)
                 
