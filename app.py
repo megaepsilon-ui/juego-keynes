@@ -166,7 +166,8 @@ if rol == "👨‍🎓 Estudiante":
                     [
                         "Escuela Politécnica Nacional",
                         "Universidad de las Fuerzas Armadas",
-                        "Universidad San Francisco de Quito"
+                        "Universidad San Francisco de Quito",
+                        "Universidad Central del Ecuador"
                     ]
                 )
                 btn_registro = st.form_submit_button("✅ Guardar y Comenzar a Jugar", use_container_width=True)
