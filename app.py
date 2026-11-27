@@ -198,62 +198,114 @@ if rol == "👨‍🎓 Estudiante":
                     st.session_state["est_cedula"] = ""
                     st.rerun()
 
-            ronda_activa, estado_sesion = get_estado_sesion(juego)
-
             with get_conn() as conn:
                 res = conn.execute(
                     "SELECT ronda, decision FROM respuestas WHERE juego = ? AND cedula = ? ORDER BY ronda ASC",
                     (juego, cedula)
                 ).fetchall()
-                jugada_actual = conn.execute(
-                    "SELECT decision FROM respuestas WHERE juego = ? AND ronda = ? AND cedula = ?",
-                    (juego, ronda_activa, cedula)
-                ).fetchone()
             
-            rondas_jugadas = [r[0] for r in res]
-            
-            # Caso 1: Ha completado todas las rondas o el profesor finalizó el juego
-            if len(rondas_jugadas) >= MAX_RONDAS or ronda_activa > MAX_RONDAS:
+            dict_jugadas = {r[0]: r[1] for r in res}
+            rondas_jugadas = sorted(list(dict_jugadas.keys()))
+            ultima_ronda = max(rondas_jugadas) if rondas_jugadas else 0
+
+            # Alternativa B: Al enviar una ronda, mostrar pantalla de resumen antes de permitir pasar a la siguiente
+            debe_ver_resumen = (ultima_ronda > 0) and not st.session_state.get(f"continuar_despues_de_{ultima_ronda}", False)
+
+            # Caso 1: Mostrar resumen de la ronda recién enviada antes de avanzar
+            if debe_ver_resumen:
+                r_res = ultima_ronda
+                mi_decision = dict_jugadas[r_res]
+                
+                st.markdown(f"### 📊 Resultados de tu Ronda {r_res} de {MAX_RONDAS}")
+                st.progress(r_res / MAX_RONDAS)
+                
+                with get_conn() as conn:
+                    df_ronda_clase = pd.read_sql_query(
+                        "SELECT decision FROM respuestas WHERE juego = ? AND ronda = ?",
+                        conn, params=(juego, r_res)
+                    )
+                
+                promedio_clase = df_ronda_clase["decision"].mean() if not df_ronda_clase.empty else mi_decision
+                meta_clase = (2 / 3) * promedio_clase
+                distancia_mi = abs(mi_decision - meta_clase)
+                total_jugadores = len(df_ronda_clase)
+                
+                with st.container(border=True):
+                    st.markdown("#### 🎯 Resultados de la Ronda:")
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("Tu número", f"{mi_decision:.1f}")
+                    c2.metric("Promedio clase", f"{promedio_clase:.2f}")
+                    c3.metric("Meta (2/3)", f"{meta_clase:.2f}")
+                    
+                    st.divider()
+                    st.write(f"📏 **Tu distancia a la meta ganadora:** **{distancia_mi:.2f}** unidades")
+                    st.caption(f"👥 Respuestas registradas en la clase para esta ronda: **{total_jugadores}**")
+                    
+                    if distancia_mi <= 3.0:
+                        st.success("🌟 ¡Excelente intuición! Tu número estuvo sumamente cerca de la meta ganadora.")
+                    elif mi_decision > meta_clase:
+                        st.info(f"💡 **Retroalimentación:** Tu número ({mi_decision:.1f}) estuvo **por encima** de la meta ({meta_clase:.2f}). Recuerda que la meta es 2/3 del promedio. ¡Para la siguiente ronda la clase tenderá a jugar números más bajos!")
+                    else:
+                        st.info(f"💡 **Retroalimentación:** Tu número ({mi_decision:.1f}) estuvo **por debajo** de la meta ({meta_clase:.2f}). ¡Interesante estrategia! Observa la meta calculada para calibrar tu siguiente jugada.")
+                
+                if r_res < MAX_RONDAS:
+                    st.divider()
+                    st.markdown(f"##### ¿Listo para la Ronda {r_res + 1}?")
+                    st.caption(f"Toma en cuenta la meta de esta ronda (**{meta_clase:.2f}**) para estimar tu siguiente número estratégico.")
+                    if st.button(f"➡️ Continuar a la Ronda {r_res + 1}", type="primary", use_container_width=True):
+                        st.session_state[f"continuar_despues_de_{r_res}"] = True
+                        st.rerun()
+                else:
+                    st.divider()
+                    st.balloons()
+                    st.success(f"🎉 **¡Felicitaciones, {estudiante}! Has completado las {MAX_RONDAS} rondas del juego.**")
+                    
+                    df_resumen = pd.DataFrame([
+                        {"Ronda": r, "Tu Decisión": dict_jugadas[r]} for r in rondas_jugadas
+                    ])
+                    st.subheader("📋 Resumen histórico de tus decisiones:")
+                    st.dataframe(df_resumen, use_container_width=True, hide_index=True)
+                    st.info("👀 Observa el proyector para ver el análisis de la clase y la convergencia hacia el Equilibrio de Nash.")
+
+            # Caso 2: Ya completó las 5 rondas y ya revisó el resumen
+            elif len(rondas_jugadas) >= MAX_RONDAS:
                 st.success(f"🎉 **¡Excelente, {estudiante}! Has completado las {MAX_RONDAS} rondas del juego.**")
                 st.progress(1.0)
-                st.info("Has alcanzado el límite de 5 rondas. Presta atención al proyector para ver el análisis de resultados.")
                 
-                df_resumen = pd.DataFrame(res, columns=["Ronda", "Tu Decisión"])
-                st.subheader("📋 Resumen de tus decisiones:")
+                df_resumen = pd.DataFrame([
+                    {"Ronda": r, "Tu Decisión": dict_jugadas[r]} for r in rondas_jugadas
+                ])
+                st.subheader("📋 Resumen de tus decisiones en las 5 rondas:")
                 st.dataframe(df_resumen, use_container_width=True, hide_index=True)
-            
-            # Caso 2: Ya envió la respuesta para la ronda activa
-            elif jugada_actual is not None:
-                st.markdown(f"### 📍 Ronda **{ronda_activa}** de **{MAX_RONDAS}**")
-                st.progress(ronda_activa / MAX_RONDAS)
-                st.success(f"✅ ¡Tu jugada para la **Ronda {ronda_activa}** ya fue registrada! (Tu decisión: **{jugada_actual[0]:.1f}**)")
-                st.info("👀 **Presta atención al proyector de la clase:** El profesor proyectará los resultados, el promedio y la meta ganadora de esta ronda.")
-                st.caption("Cuando el profesor abra la siguiente ronda, tu pantalla se habilitará automáticamente.")
-                if st.button("🔄 Comprobar si ya inició la siguiente ronda", use_container_width=True):
-                    st.rerun()
+                st.info("Observa el proyector para ver el análisis general de la clase.")
 
-            # Caso 3: La ronda activa está cerrada por el profesor
-            elif estado_sesion == "cerrada":
-                st.markdown(f"### 📍 Ronda **{ronda_activa}** de **{MAX_RONDAS}**")
-                st.warning(f"🔒 La **Ronda {ronda_activa}** está cerrada temporalmente para nuevas respuestas.")
-                st.info("👀 Observa el proyector de la clase para ver el debate y los resultados. Espera a que el docente habilite la siguiente ronda.")
-                if st.button("🔄 Comprobar si ya abrió la siguiente ronda", use_container_width=True):
-                    st.rerun()
-
-            # Caso 4: Ronda activa abierta y el alumno aún no ha jugado
+            # Caso 3: Formulario para responder la ronda correspondiente
             else:
-                st.markdown(f"### 📍 Ronda **{ronda_activa}** de **{MAX_RONDAS}**")
-                st.progress((ronda_activa - 1) / MAX_RONDAS)
+                ronda_a_jugar = len(rondas_jugadas) + 1
                 
-                key_def = f"def_val_{ronda_activa}"
+                st.markdown(f"### 📍 Ronda **{ronda_a_jugar}** de **{MAX_RONDAS}**")
+                st.progress((ronda_a_jugar - 1) / MAX_RONDAS)
+                
+                if ronda_a_jugar > 1:
+                    r_ant = ronda_a_jugar - 1
+                    with get_conn() as conn:
+                        df_prev = pd.read_sql_query(
+                            "SELECT decision FROM respuestas WHERE juego = ? AND ronda = ?",
+                            conn, params=(juego, r_ant)
+                        )
+                    if not df_prev.empty:
+                        meta_prev = (2 / 3) * df_prev["decision"].mean()
+                        st.caption(f"💡 Recordatorio: En la Ronda {r_ant}, la meta fue **{meta_prev:.2f}** (tu jugada fue **{dict_jugadas.get(r_ant, 0):.1f}**).")
+
+                key_def = f"def_val_{ronda_a_jugar}"
                 if key_def not in st.session_state:
                     st.session_state[key_def] = round(random.uniform(10.0, 90.0), 1)
                 
-                with st.form(f"form_jugada_{ronda_activa}"):
+                with st.form(f"form_jugada_{ronda_a_jugar}"):
                     st.markdown("#### Selecciona tu número estratégico (0.0 - 100.0)")
                     st.write("Debes escoger un valor entre **0 y 100**. Ganará quien esté más cerca de **2/3 del promedio** de toda la clase.")
                     decision = st.number_input(
-                        f"Tu número para la Ronda {ronda_activa}:",
+                        f"Tu número para la Ronda {ronda_a_jugar}:",
                         min_value=0.0,
                         max_value=100.0,
                         value=float(st.session_state[key_def]),
@@ -262,7 +314,7 @@ if rol == "👨‍🎓 Estudiante":
                     )
                     
                     st.divider()
-                    texto_boton = f"🚀 Confirmar y Enviar Ronda {ronda_activa}" if ronda_activa < MAX_RONDAS else "🏁 Confirmar y Finalizar Ronda 5"
+                    texto_boton = f"🚀 Confirmar y Enviar Ronda {ronda_a_jugar}" if ronda_a_jugar < MAX_RONDAS else "🏁 Confirmar y Finalizar Ronda 5"
                     enviado = st.form_submit_button(texto_boton, use_container_width=True)
                     
                     if enviado:
@@ -270,12 +322,12 @@ if rol == "👨‍🎓 Estudiante":
                             with get_conn() as conn:
                                 conn.execute(
                                     "INSERT INTO respuestas (juego, ronda, estudiante, cedula, universidad, decision) VALUES (?, ?, ?, ?, ?, ?)",
-                                    (juego, ronda_activa, estudiante, cedula, universidad, float(decision))
+                                    (juego, ronda_a_jugar, estudiante, cedula, universidad, float(decision))
                                 )
-                            st.success(f"✅ ¡Jugada de la Ronda {ronda_activa} enviada!")
+                            st.session_state[f"continuar_despues_de_{ronda_a_jugar}"] = False
                             st.rerun()
                         except sqlite3.IntegrityError:
-                            st.warning(f"Ya se había registrado una respuesta para la Ronda {ronda_activa} con tu cédula.")
+                            st.warning(f"Ya se había registrado una respuesta para la Ronda {ronda_a_jugar} con tu cédula.")
 
 # ==============================================================================
 # VISTA DEL PROFESOR (PROYECTOR)
